@@ -252,8 +252,8 @@ async function startQoderCliLogin() {
   log.info('Starting qodercli login process...');
   
   return new Promise((resolve, reject) => {
-    // Use Windows Terminal on Windows, fallback to default shell
-    const shellCmd = os.platform() === 'win32' ? 'wt.exe' : true;
+    // Use PowerShell on Windows, fallback to default shell
+    const shellCmd = os.platform() === 'win32' ? 'powershell.exe' : true;
     const proc = spawn('npx', ['@qoder-ai/qodercli', 'login'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: shellCmd,
