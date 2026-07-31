@@ -345,27 +345,40 @@ async function startQoderCliLogin() {
   });
 }
 
-// ─── QODERCLI LOGOUT ────────────────────────────────────────────────
-function logoutFromQoderCLI() {
+// ─── QODERCLI LOGOUT (Send /logout to interactive session) ──────────
+async function logoutFromQoderCLI(proc) {
   log.info('Logging out from Qoder CLI...');
   
-  try {
-    // Use qodercli command directly (available after npm install)
-    execSync('qodercli logout', { 
-      stdio: 'pipe', 
-      timeout: 10000,
-      windowsHide: true 
-    });
-    log.ok('qodercli logout executed successfully');
-    return true;
-  } catch (err) {
-    if (err.stderr && err.stderr.toString().includes('not logged in')) {
-      log.step('qodercli was not logged in (already logged out)');
-      return true;
+  return new Promise((resolve) => {
+    if (!proc || proc.killed) {
+      log.warn('qodercli process not running, skipping logout');
+      resolve(false);
+      return;
     }
-    log.warn(`qodercli logout failed: ${err.message}`);
-    return false;
-  }
+
+    // Send /logout command to the interactive session
+    log.step('Sending /logout command to qodercli...');
+    proc.stdin.write('/logout\n');
+
+    // Wait for process to exit or timeout
+    const timeout = setTimeout(() => {
+      log.warn('Timeout waiting for logout, killing process');
+      proc.kill();
+      resolve(true);
+    }, 10000);
+
+    proc.on('close', (code) => {
+      clearTimeout(timeout);
+      log.ok(`qodercli exited with code ${code}`);
+      resolve(code === 0);
+    });
+
+    proc.on('error', (err) => {
+      clearTimeout(timeout);
+      log.warn(`Logout error: ${err.message}`);
+      resolve(false);
+    });
+  });
 }
 
 // ─── GOOGLE SSO HANDLER ─────────────────────────────────────────────
@@ -684,10 +697,10 @@ async function processAccount(account, idx, total) {
 
     // ── 7. Logout from Qoder CLI ──────────────────────────────────
     await randomDelay(2000, 3000);
-    const logoutOk = logoutFromQoderCLI();
+    const logoutOk = await logoutFromQoderCLI(qodercliProc);
 
     if (logoutOk) {
-      log.ok(`✓ ${email} — LOGOUT SUCCESS (via qodercli)`);
+      log.ok(`✓ ${email} — LOGOUT SUCCESS (via /logout command)`);
     } else {
       log.warn(`⚠ ${email} — Logout failed, but login was successful`);
     }
