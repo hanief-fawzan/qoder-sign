@@ -172,22 +172,50 @@ function loadAccounts() {
     .filter(l => l && !l.startsWith('#'));
 
   const accounts = [];
+  let skippedDone = 0;
   for (const line of lines) {
     const sep = line.indexOf(':');
     if (sep === -1) {
       log.warn(`Skip baris tidak valid (format email:password): ${line}`);
       continue;
     }
-    accounts.push({
+    const account = {
       raw:      line,
       email:    line.slice(0, sep).trim(),
       password: line.slice(sep + 1).trim(),
-    });
+    };
+    // Skip accounts already in done_accounts.txt (duplicate checker)
+    if (isAlreadyDone(account)) {
+      log.step(`Skip ${account.email} (already in done_accounts.txt)`);
+      skippedDone++;
+      continue;
+    }
+    accounts.push(account);
+  }
+  if (skippedDone > 0) {
+    log.info(`Skipped ${skippedDone} account(s) already in done_accounts.txt`);
   }
   return accounts;
 }
 
 function moveToDone(account) {
+  // Duplicate checker: don't add if already in done_accounts.txt
+  if (fs.existsSync(CONFIG.DONE_FILE)) {
+    const doneLines = fs.readFileSync(CONFIG.DONE_FILE, 'utf8')
+      .split('\n')
+      .map(l => l.trim())
+      .filter(l => l && !l.startsWith('#'));
+    if (doneLines.includes(account.raw)) {
+      log.step(`Already in done_accounts.txt, skip add`);
+      // Still remove from accounts.txt
+      const lines = fs.readFileSync(CONFIG.ACCOUNTS_FILE, 'utf8')
+        .split('\n')
+        .filter(l => l.trim() !== account.raw);
+      fs.writeFileSync(CONFIG.ACCOUNTS_FILE, lines.join('\n'), 'utf8');
+      return;
+    }
+  }
+
   fs.appendFileSync(CONFIG.DONE_FILE, account.raw + '\n', 'utf8');
 
   const lines = fs.readFileSync(CONFIG.ACCOUNTS_FILE, 'utf8')
@@ -196,6 +224,21 @@ function moveToDone(account) {
   fs.writeFileSync(CONFIG.ACCOUNTS_FILE, lines.join('\n'), 'utf8');
 
   log.ok(`Dipindahkan ke done_accounts.txt`);
+}
+
+// ─── DUPLICATE CHECKER (skip accounts already in done) ──────────────
+function isAlreadyDone(account) {
+  if (!fs.existsSync(CONFIG.DONE_FILE)) {
+    // Auto-create done_accounts.txt if not exists
+    fs.writeFileSync(CONFIG.DONE_FILE, '', 'utf8');
+    log.step(`Created ${CONFIG.DONE_FILE} (auto)`);
+    return false;
+  }
+  const doneLines = fs.readFileSync(CONFIG.DONE_FILE, 'utf8')
+    .split('\n')
+    .map(l => l.trim())
+    .filter(l => l && !l.startsWith('#'));
+  return doneLines.includes(account.raw);
 }
 
 // ─── QODERCLI LOGIN (Spawn Process) ─────────────────────────────────

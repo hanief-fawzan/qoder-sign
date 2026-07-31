@@ -2,6 +2,7 @@
 REM ============================================================
 REM  Qoder Sign - Login (Visible Mode)
 REM  Browser terlihat untuk handle captcha + klik OK di HP
+REM  Smart retry: auto-ask jika ada akun gagal
 REM ============================================================
 
 cd /d "%~dp0"
@@ -18,7 +19,35 @@ if not exist .env (
     echo.
 )
 
-REM Force visible mode (override .env)
+REM Force visible mode
 set HEADLESS=false
+
+:RUN_LOGIN
 node index.js
-if errorlevel 1 pause
+
+REM Check if accounts.txt still has content (failed accounts)
+findstr /r /c:"^[^#]" accounts.txt >nul 2>&1
+if errorlevel 1 (
+    echo.
+    echo [i] All accounts processed successfully!
+    pause
+    exit /b 0
+)
+
+REM There are still accounts in accounts.txt (failed ones)
+echo.
+echo ============================================================
+echo  Some accounts failed. They are still in accounts.txt.
+echo ============================================================
+echo.
+set /p RETRY="Retry failed accounts? (y/n): "
+if /i "%RETRY%"=="y" (
+    echo.
+    echo [i] Retrying...
+    echo.
+    goto RUN_LOGIN
+) else (
+    echo.
+    echo [i] Skipping retry. Failed accounts remain in accounts.txt.
+    pause
+)
