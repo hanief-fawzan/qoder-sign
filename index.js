@@ -247,20 +247,27 @@ function isAlreadyDone(account) {
   return doneLines.includes(account.raw);
 }
 
-// ─── QODERCLI LOGIN (Spawn Process) ─────────────────────────────────
+// ─── QODERCLI LOGIN (Interactive Mode with /login command) ──────────
 async function startQoderCliLogin() {
-  log.info('Starting qodercli login process...');
+  log.info('Starting qodercli interactive login process...');
   
   return new Promise((resolve, reject) => {
+    // Set NO_BROWSER=true to force URL output
+    const env = { ...process.env, NO_BROWSER: 'true' };
+    
     // Use PowerShell on Windows, fallback to default shell
     const shellCmd = os.platform() === 'win32' ? 'powershell.exe' : true;
-    const proc = spawn('npx', ['@qoder-ai/qodercli', 'login'], {
+    
+    // Spawn qodercli in interactive mode
+    const proc = spawn('npx', ['@qoder-ai/qodercli'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: shellCmd,
+      env: env,
     });
 
     let output = '';
     let loginUrl = null;
+    let loginPrompted = false;
 
     // Capture stdout
     proc.stdout.on('data', (data) => {
@@ -268,11 +275,20 @@ async function startQoderCliLogin() {
       output += text;
       log.step(`qodercli: ${text.trim()}`);
 
-      // Look for URL in output
-      const urlMatch = text.match(/https?:\/\/[^\s]+/);
-      if (urlMatch && !loginUrl) {
-        loginUrl = urlMatch[0];
-        log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+      // Send /login command when we see the interactive prompt
+      if (!loginPrompted && (text.includes('>') || text.includes('qoder') || text.includes('prompt'))) {
+        loginPrompted = true;
+        log.step('Sending /login command...');
+        proc.stdin.write('/login\n');
+      }
+
+      // Look for URL in output (after /login is sent)
+      if (loginPrompted) {
+        const urlMatch = text.match(/https?:\/\/[^\s]+/);
+        if (urlMatch && !loginUrl) {
+          loginUrl = urlMatch[0];
+          log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+        }
       }
     });
 
@@ -283,10 +299,12 @@ async function startQoderCliLogin() {
       log.step(`qodercli (stderr): ${text.trim()}`);
 
       // Look for URL in stderr too
-      const urlMatch = text.match(/https?:\/\/[^\s]+/);
-      if (urlMatch && !loginUrl) {
-        loginUrl = urlMatch[0];
-        log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+      if (loginPrompted) {
+        const urlMatch = text.match(/https?:\/\/[^\s]+/);
+        if (urlMatch && !loginUrl) {
+          loginUrl = urlMatch[0];
+          log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+        }
       }
     });
 
@@ -314,7 +332,7 @@ async function startQoderCliLogin() {
         proc.kill();
         reject(new Error('Timeout waiting for login URL'));
       }
-    }, 10000);
+    }, 15000);
 
     // Clear timeout if we got URL
     const checkUrl = setInterval(() => {
