@@ -47,34 +47,23 @@ echo.
 
 REM Check qodercli
 echo [i] Checking qodercli...
-qodercli --version >nul 2>&1
+where qodercli >nul 2>&1
 if errorlevel 1 (
-    REM Check common install locations
-    if exist "%USERPROFILE%\.qoder\qodercli.exe" (
-        echo [+] qodercli found at %USERPROFILE%\.qoder\
-        echo [!] Adding to PATH for this session...
-        set "PATH=%USERPROFILE%\.qoder;%PATH%"
-    ) else if exist "%LOCALAPPDATA%\qoder\qodercli.exe" (
-        echo [+] qodercli found at %LOCALAPPDATA%\qoder\
-        echo [!] Adding to PATH for this session...
-        set "PATH=%LOCALAPPDATA%\qoder;%PATH%"
-    ) else (
-        echo [!] qodercli not found!
-        echo.
-        echo [i] Qoder CLI is a separate application that must be installed first.
-        echo     Please install it using one of these methods:
-        echo.
-        echo     Method 1 - PowerShell (Recommended):
-        echo       irm https://qoder.com/install.ps1 ^| iex
-        echo.
-        echo     Method 2 - Download installer:
-        echo       Visit https://qoder.com/cli
-        echo.
-        echo     After installation, run setup.bat again.
-        echo.
-        pause
-        exit /b 1
-    )
+    echo [!] qodercli not found!
+    echo.
+    echo [i] Qoder CLI is a separate application that must be installed first.
+    echo     Please install it using one of these methods:
+    echo.
+    echo     Method 1 - PowerShell (Recommended):
+    echo       irm https://qoder.com/install.ps1 ^| iex
+    echo.
+    echo     Method 2 - CMD:
+    echo       curl -fsSL https://qoder.com/install.cmd -o install.cmd ^&^& install.cmd
+    echo.
+    echo     After installation, run setup.bat again.
+    echo.
+    pause
+    exit /b 1
 ) else (
     echo [+] qodercli found
 )

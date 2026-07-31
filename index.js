@@ -319,7 +319,7 @@ async function startQoderCliLogin() {
     const qodercliPath = findQoderCli();
     log.step(`Using qodercli from: ${qodercliPath}`);
     
-    // Try direct login command first
+    // Run qodercli login command
     const proc = spawn(qodercliPath, ['login'], {
       stdio: ['ignore', 'pipe', 'pipe'],
       env: env,
@@ -356,12 +356,9 @@ async function startQoderCliLogin() {
       }
     });
 
-    // Process exit
+    // Process exit - only resolve when process completes
     proc.on('close', (code) => {
-      if (loginUrl) {
-        log.ok('Login URL captured successfully');
-        resolve({ success: true, url: loginUrl, output });
-      } else if (code === 0) {
+      if (code === 0) {
         log.ok('qodercli login completed successfully');
         resolve({ success: true, url: loginUrl, output });
       } else {
@@ -376,16 +373,19 @@ async function startQoderCliLogin() {
       reject(err);
     });
 
-    // Timeout: wait for URL or timeout
+    // Timeout: wait for process to complete or timeout
     const timeout = setTimeout(() => {
-      if (!loginUrl) {
-        log.warn('Timeout waiting for login URL from qodercli');
-        proc.kill();
-        reject(new Error('Timeout waiting for login URL'));
-      }
-    }, 20000);
+      log.warn('Timeout waiting for qodercli login to complete');
+      proc.kill();
+      resolve({ success: false, url: loginUrl, output, timeout: true });
+    }, CONFIG.QODERCLI_TIMEOUT || 180000); // 3 minutes default
 
-    // Clear timeout if we got URL
+    // Clear timeout when process exits
+    proc.on('close', () => {
+      clearTimeout(timeout);
+    });
+
+    // Resolve immediately when we get URL (don't wait for process)
     const checkUrl = setInterval(() => {
       if (loginUrl) {
         clearTimeout(timeout);
@@ -663,7 +663,7 @@ async function processAccount(account, idx, total) {
       waitUntil: 'domcontentloaded',
       timeout: CONFIG.NAV_TIMEOUT,
     });
-    await page.waitForLoadState('networkidle2').catch(() => {});
+    await page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
     await randomDelay(2000, 3000);
 
     await humanLikeScroll(page);

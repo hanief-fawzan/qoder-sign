@@ -16,8 +16,9 @@ Automasi login/logout Qoder CLI menggunakan Google SSO dengan Chrome Incognito. 
 ## 📋 Persyaratan
 
 - **Windows 10/11**
-- **Node.js 20+** — [Download](https://nodejs.org/) (wajib 20+ untuk qodercli)
+- **Node.js 18+** — [Download](https://nodejs.org/)
 - **Google Chrome** — Harus terinstall di sistem
+- **Qoder CLI** — Aplikasi terpisah, install dari [https://qoder.com/cli](https://qoder.com/cli)
 
 ## 🚀 Instalasi
 
@@ -57,42 +58,67 @@ Jika kamu lebih suka interface grafis:
 
 **Tidak perlu login GitHub** untuk semua cara di atas karena repository ini public.
 
-### 2. Jalankan Setup
+### 2. Install Qoder CLI
+
+**⚠️ PENTING: Qoder CLI BUKAN npm package!**
+
+Qoder CLI adalah aplikasi terpisah yang harus diinstall menggunakan installer resmi dari Qoder.
+
+**Windows (PowerShell):**
+```powershell
+irm https://qoder.com/install.ps1 | iex
+```
+
+**Windows (CMD):**
+```cmd
+curl -fsSL https://qoder.com/install.cmd -o install.cmd && install.cmd
+```
+
+**macOS/Linux:**
+```bash
+curl -fsSL https://qoder.com/install | bash
+```
+
+**Atau download manual:**
+1. Kunjungi [https://qoder.com/cli](https://qoder.com/cli)
+2. Pilih platform kamu (Windows/macOS/Linux)
+3. Download dan jalankan installer
+4. Verifikasi: `qodercli --version`
+
+**Catatan:** Qoder CLI biasanya terinstall di `%USERPROFILE%\.qoder\bin\qodercli\`. Script ini akan auto-detect lokasi tersebut.
+
+### 3. Install Dependencies
 
 **Windows (Recommended):**
 ```bash
 setup.bat
 ```
 
-Script ini akan otomatis:
-- Install Node.js dependencies (`npm install`)
-- Install Qoder CLI (`npm install @qoder-ai/qodercli`)
-- Copy `accounts.txt.example` → `accounts.txt` (jika belum ada)
-- Copy `.env.example` → `.env` (jika belum ada)
-
 **Manual:**
 ```bash
 npm install
-npm install @qoder-ai/qodercli
+```
+
+### 4. Setup accounts.txt
+
+**Copy from template:**
+```bash
 copy accounts.txt.example accounts.txt
+```
+
+### 5. Setup .env (MANDATORY)
+
+**Windows:**
+```bash
 copy .env.example .env
 ```
 
-### 3. Setup accounts.txt
-
-Buka `accounts.txt` dan isi dengan format:
-
-```
-email1@gmail.com:password1
-email2@gmail.com:password2
-email3@gmail.com:password3
+**Linux/Mac:**
+```bash
+cp .env.example .env
 ```
 
-**Format:** `email:password` (satu akun per baris)
-
-### 4. Setup .env (MANDATORY)
-
-Edit file `.env` sesuai kebutuhan:
+Kemudian edit file `.env` sesuai kebutuhan:
 
 ```env
 # Browser Settings
@@ -126,17 +152,30 @@ RETRY_DELAY=15000                 # delay sebelum retry (ms)
 **Catatan:**
 - File `.env` bersifat **WAJIB**. Program tidak akan jalan tanpa `.env`.
 - `setup.bat` akan otomatis copy `.env.example` ke `.env` jika belum ada.
+- Semua konfigurasi (HEADLESS, MAX_RETRIES, dll) diatur di `.env`.
 
-### 5. Verify Installation
+### 6. Verify Installation
 
 Pastikan semua requirements terpenuhi:
-- ✅ Node.js terinstall (`node --version`) — harus versi 20+
+- ✅ Node.js terinstall (`node --version`)
 - ✅ Google Chrome terinstall
-- ✅ Qoder CLI terinstall (`npx qodercli --version`)
+- ✅ Qoder CLI terinstall (`qodercli --version`)
 
 ## 📝 Cara Pakai
 
-### 1. Jalankan Program
+### 1. Edit File `accounts.txt`
+
+Buka `accounts.txt` dan isi dengan format:
+
+```
+email1@gmail.com:password1
+email2@gmail.com:password2
+email3@gmail.com:password3
+```
+
+**Format:** `email:password` (satu akun per baris)
+
+### 2. Jalankan Program
 
 **Windows:**
 ```bash
@@ -148,30 +187,31 @@ run.bat
 node index.js
 ```
 
-### 2. Proses Otomatis
+### 3. Proses Otomatis
 
 Program akan melakukan langkah berikut untuk setiap akun:
 
 1. Baca konfigurasi dari `.env`
-2. Jalankan `qodercli login` dengan environment `NO_BROWSER=true` (otomatis di-set oleh script)
-3. qodercli print login URL ke output
-4. Script capture login URL dari output
-5. Buka Chrome Incognito ke URL tersebut
-6. Klik "Sign in with Google"
-7. Auto-fill email dan password Google
-8. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
-9. Login ke Qoder berhasil (token tersimpan otomatis oleh qodercli)
-10. Jalankan `qodercli logout`
-11. Pindah akun ke `done_accounts.txt`
-12. Lanjut ke akun berikutnya
-13. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
+2. Spawn session interactive `qodercli` dengan environment `NO_BROWSER=true` (otomatis di-set oleh script, user tidak perlu set manual)
+3. Auto-select "Sign in to continue" di menu awal qodercli
+4. Auto-select "Login with Qoder Platform (Browser)" sebagai metode login
+5. Capture login URL dari output qodercli (karena `NO_BROWSER=true`, URL di-print bukan dibuka otomatis)
+6. Buka Chrome Incognito ke URL tersebut
+7. Klik "Sign in with Google"
+8. Auto-fill email dan password Google
+9. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
+10. Login ke Qoder berhasil (token tersimpan otomatis oleh qodercli)
+11. Kirim command `/logout` ke session qodercli yang sama
+12. Pindah akun ke `done_accounts.txt`
+13. Lanjut ke akun berikutnya
+14. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
 
 **Catatan Penting:**
 - `NO_BROWSER=true` di-set **otomatis** oleh script. Kamu **TIDAK PERLU** set environment variable ini secara manual.
 - Script akan handle semua proses login/logout secara otomatis.
 - Kamu hanya perlu mengisi `accounts.txt` dan menjalankan `run.bat`.
 
-### 3. Cek Hasil
+### 4. Cek Hasil
 
 - **Akun sukses:** Ada di `done_accounts.txt`
 - **Akun gagal:** Tetap di `accounts.txt` (akan di-retry sesuai MAX_RETRIES)
@@ -180,7 +220,8 @@ Program akan melakukan langkah berikut untuk setiap akun:
 
 ```
 Account 1:
-  ├─ Run qodercli login (NO_BROWSER=true)
+  ├─ Spawn qodercli interactive (NO_BROWSER=true)
+  ├─ Auto-select Sign in → Browser login
   ├─ Capture login URL dari output
   ├─ Chrome Incognito (clean session)
   ├─ Random User Agent + Viewport
@@ -188,15 +229,18 @@ Account 1:
   ├─ Login Google SSO (auto-fill email + password)
   ├─ Wait for HP verification (2 min)
   ├─ Login to Qoder berhasil
-  ├─ Run qodercli logout
+  ├─ Send /logout ke session qodercli
   ├─ Close incognito window
   └─ Move to done_accounts.txt
 
 Account 2:
-  ├─ New qodercli login session
+  ├─ New qodercli session
   ├─ New Chrome Incognito (clean session)
   ├─ Different User Agent + Viewport
   ├─ Random delays (anti-pattern)
+  └─ ... same flow
+
+Account 3:
   └─ ... same flow
 
 Failed Accounts:
@@ -219,7 +263,7 @@ Failed Accounts:
 ```
 qoder-sign/
 ├── index.js              # Main script
-├── package.json          # Dependencies (termasuk @qoder-ai/qodercli)
+├── package.json          # Dependencies
 ├── accounts.txt          # Input: akun yang akan diproses (copy dari .example)
 ├── accounts.txt.example  # Template accounts
 ├── .env                  # Configuration (MANDATORY, copy dari .example)
@@ -242,13 +286,42 @@ qoder-sign/
 - Contoh: `CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe`
 
 ### qodercli tidak terinstall
-```bash
-npm install @qoder-ai/qodercli
+
+**⚠️ Qoder CLI BUKAN npm package!**
+
+Download dan install Qoder CLI dari website resmi:
+
+1. Kunjungi [https://qoder.com/cli](https://qoder.com/cli)
+2. Pilih platform kamu (Windows/macOS/Linux)
+3. Download installer yang sesuai
+4. Jalankan installer
+5. Verifikasi dengan menjalankan: `qodercli --version`
+
+**Atau gunakan command line:**
+
+**Windows (PowerShell):**
+```powershell
+irm https://qoder.com/install.ps1 | iex
 ```
 
-### qodercli command not found
-- Gunakan `npx qodercli` untuk menjalankan
-- Atau install global: `npm install -g @qoder-ai/qodercli`
+**Windows (CMD):**
+```cmd
+curl -fsSL https://qoder.com/install.cmd -o install.cmd && install.cmd
+```
+
+**macOS/Linux:**
+```bash
+curl -fsSL https://qoder.com/install | bash
+```
+
+**Catatan:** Qoder CLI biasanya terinstall di `%USERPROFILE%\.qoder\bin\qodercli\`. Script ini akan auto-detect lokasi tersebut.
+
+### qodercli tidak ditemukan di PATH
+- Script akan auto-detect di lokasi default: `%USERPROFILE%\.qoder\bin\qodercli\`
+- Kalau masih tidak ditemukan, tambahkan lokasi tersebut ke PATH:
+  ```cmd
+  set PATH=%USERPROFILE%\.qoder\bin\qodercli;%PATH%
+  ```
 
 ### Login gagal
 - Cek email dan password di `accounts.txt`
