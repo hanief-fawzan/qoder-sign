@@ -185,7 +185,7 @@ node index.js
 Program akan melakukan langkah berikut untuk setiap akun:
 
 1. Baca konfigurasi dari `.env`
-2. Spawn session interactive `qodercli` dengan environment `NO_BROWSER=true`
+2. Spawn session interactive `qodercli` dengan environment `NO_BROWSER=true` (otomatis di-set oleh script, user tidak perlu set manual)
 3. Auto-select "Sign in to continue" di menu awal qodercli
 4. Auto-select "Login with Qoder Platform (Browser)" sebagai metode login
 5. Capture login URL dari output qodercli (karena `NO_BROWSER=true`, URL di-print bukan dibuka otomatis)
@@ -198,6 +198,11 @@ Program akan melakukan langkah berikut untuk setiap akun:
 12. Pindah akun ke `done_accounts.txt`
 13. Lanjut ke akun berikutnya
 14. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
+
+**Catatan Penting:**
+- `NO_BROWSER=true` di-set **otomatis** oleh script. Kamu **TIDAK PERLU** set environment variable ini secara manual.
+- Script akan handle semua proses login/logout secara otomatis.
+- Kamu hanya perlu mengisi `accounts.txt` dan menjalankan `run.bat`.
 
 ### 4. Cek Hasil
 
