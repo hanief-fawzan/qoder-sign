@@ -18,7 +18,7 @@ Automasi login/logout Qoder CLI menggunakan Google SSO dengan Chrome Incognito. 
 - **Windows 10/11**
 - **Node.js 18+** — [Download](https://nodejs.org/)
 - **Google Chrome** — Harus terinstall di sistem
-- **qodercli** — Akan diinstall otomatis atau manual: `npm install -g @anthropic-ai/qodercli`
+- **Qoder CLI** — Download dari [https://qoder.com/cli](https://qoder.com/cli)
 
 ## 🚀 Instalasi
 
@@ -58,7 +58,27 @@ Jika kamu lebih suka interface grafis:
 
 **Tidak perlu login GitHub** untuk semua cara di atas karena repository ini public.
 
-### 2. Install Dependencies
+### 2. Install Qoder CLI
+
+Qoder CLI adalah aplikasi terpisah yang harus diinstall terlebih dahulu.
+
+**Windows (PowerShell):**
+```powershell
+irm https://qoder.com/install.ps1 | iex
+```
+
+**macOS/Linux:**
+```bash
+curl -fsSL https://qoder.com/install.sh | bash
+```
+
+**Atau download manual:**
+1. Kunjungi [https://qoder.com/cli](https://qoder.com/cli)
+2. Pilih platform kamu (Windows/macOS/Linux)
+3. Download dan jalankan installer
+4. Verifikasi: `qodercli --version`
+
+### 3. Install Dependencies
 
 **Windows (Recommended):**
 ```bash
@@ -70,7 +90,7 @@ setup.bat
 npm install
 ```
 
-### 3. Setup accounts.txt
+### 4. Setup accounts.txt
 
 **Copy from template:**
 ```bash
@@ -243,8 +263,25 @@ qoder-sign/
 - Contoh: `CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe`
 
 ### qodercli tidak terinstall
+
+Download dan install Qoder CLI dari website resmi:
+
+1. Kunjungi [https://qoder.com/cli](https://qoder.com/cli)
+2. Pilih platform kamu (Windows/macOS/Linux)
+3. Download installer yang sesuai
+4. Jalankan installer
+5. Verifikasi dengan menjalankan: `qodercli --version`
+
+**Atau gunakan command line:**
+
+**Windows (PowerShell):**
+```powershell
+irm https://qoder.com/install.ps1 | iex
+```
+
+**macOS/Linux:**
 ```bash
-npm install -g @anthropic-ai/qodercli
+curl -fsSL https://qoder.com/install.sh | bash
 ```
 
 ### Login gagal
