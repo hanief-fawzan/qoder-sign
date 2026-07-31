@@ -182,16 +182,18 @@ node index.js
 
 Program akan:
 1. Baca konfigurasi dari `.env`
-2. Buka Chrome Incognito
-3. Navigate ke Qoder login page
-4. Klik "Sign in with Google"
-5. Auto-fill email dan password
-6. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
-7. Login ke Qoder berhasil
-8. Logout dari Qoder CLI (`qodercli logout`)
-9. Pindah akun ke `done_accounts.txt`
-10. Lanjut ke akun berikutnya
-11. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
+2. Spawn session interactive `qodercli` dengan `NO_BROWSER=true`
+3. Kirim command `/login` ke qodercli
+4. Capture login URL dari output qodercli
+5. Buka Chrome Incognito ke URL tersebut
+6. Klik "Sign in with Google"
+7. Auto-fill email dan password Google
+8. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
+9. Login ke Qoder berhasil (token tersimpan otomatis)
+10. Kirim command `/logout` ke session qodercli yang sama
+11. Pindah akun ke `done_accounts.txt`
+12. Lanjut ke akun berikutnya
+13. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
 
 ### 4. Cek Hasil
 
