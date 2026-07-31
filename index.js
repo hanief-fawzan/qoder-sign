@@ -258,8 +258,8 @@ async function startQoderCliLogin() {
     // Use PowerShell on Windows, fallback to default shell
     const shellCmd = os.platform() === 'win32' ? 'powershell.exe' : true;
     
-    // Spawn qodercli in interactive mode
-    const proc = spawn('npx', ['@qoder-ai/qodercli'], {
+    // Spawn qodercli in interactive mode (command available after npm install)
+    const proc = spawn('qodercli', [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: shellCmd,
       env: env,
@@ -350,8 +350,8 @@ function logoutFromQoderCLI() {
   log.info('Logging out from Qoder CLI...');
   
   try {
-    // Use npx to run locally installed qodercli (non-admin mode)
-    execSync('npx @qoder-ai/qodercli logout', { 
+    // Use qodercli command directly (available after npm install)
+    execSync('qodercli logout', { 
       stdio: 'pipe', 
       timeout: 10000,
       windowsHide: true 
