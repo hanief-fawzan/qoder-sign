@@ -193,8 +193,8 @@ qoder-sign/
 ## 🔧 Troubleshooting
 
 ### Chrome tidak terdeteksi
-- Pastikan Google Chrome terinstall di path default
-- Atau edit `findSystemChrome()` di `index.js`
+- Set `CHROME_PATH` di `.env` dengan path Chrome di sistem kamu
+- Contoh: `CHROME_PATH=C:\Program Files\Google\Chrome\Application\chrome.exe`
 
 ### qodercli tidak terinstall
 ```bash
@@ -207,8 +207,8 @@ npm install -g @anthropic-ai/qodercli
 - Pastikan tidak ada 2FA yang blocking
 
 ### Verifikasi HP tidak muncul
-- Program sudah kasih jeda 2 menit
-- Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `index.js`
+- Program sudah kasih jeda 2 menit (default)
+- Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `.env`
 
 ## 🔐 Security Note
 

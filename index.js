@@ -103,6 +103,18 @@ async function humanLikeMouseMovement(page) {
 
 // ─── SYSTEM CHROME DETECTION ────────────────────────────────────────
 function findSystemChrome() {
+  // Check if CHROME_PATH is set in .env
+  if (process.env.CHROME_PATH) {
+    if (fs.existsSync(process.env.CHROME_PATH)) {
+      log.ok(`Using Chrome from .env: ${process.env.CHROME_PATH}`);
+      return process.env.CHROME_PATH;
+    } else {
+      log.warn(`CHROME_PATH set in .env but file not found: ${process.env.CHROME_PATH}`);
+      log.info('Falling back to auto-detection...');
+    }
+  }
+
+  // Auto-detect Chrome
   const platform = os.platform();
   const candidates = [];
 

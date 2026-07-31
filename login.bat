@@ -18,5 +18,7 @@ if not exist .env (
     echo.
 )
 
+REM Force visible mode (override .env)
+set HEADLESS=false
 node index.js
 if errorlevel 1 pause
