@@ -45,23 +45,22 @@ if errorlevel 1 (
 echo [+] Dependencies installed
 echo.
 
-REM Check qodercli (local install for non-admin)
+REM Check qodercli
 echo [i] Checking qodercli...
-call npx qodercli --version >nul 2>&1
+call npx.cmd @qoder-ai/qodercli --version >nul 2>&1
 if errorlevel 1 (
     echo [!] qodercli not found!
-    echo [i] Installing qodercli locally (non-admin mode)...
-    call npm.cmd install @anthropic-ai/qodercli
+    echo [i] Installing qodercli locally...
+    call npm.cmd install @qoder-ai/qodercli
     if errorlevel 1 (
         echo [!] Failed to install qodercli
-        echo     Try manually: npm.cmd install @anthropic-ai/qodercli
+        echo     Try manually: npm install @qoder-ai/qodercli
         pause
         exit /b 1
     )
-    echo [+] qodercli installed successfully (local)
+    echo [+] qodercli installed successfully
 ) else (
-    echo [+] qodercli found:
-    call npx qodercli --version
+    echo [+] qodercli found
 )
 echo.
 
@@ -86,6 +85,6 @@ echo.
 echo  Next steps:
 echo    1. Edit accounts.txt with your Google credentials
 echo    2. Edit .env to configure settings (optional)
-echo    3. Double-click login.bat (visible) or login-headless.bat
+echo    3. Double-click run.bat
 echo.
 pause
