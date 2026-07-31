@@ -115,6 +115,11 @@ email3@gmail.com:password3
 login.bat
 ```
 
+**With Interactive Retry (asks if you want to retry failed accounts):**
+```bash
+login-retry.bat
+```
+
 **Manual:**
 ```bash
 node index.js

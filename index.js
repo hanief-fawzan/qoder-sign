@@ -42,6 +42,11 @@ const CONFIG = {
   RANDOM_DELAY_MAX: parseInt(process.env.RANDOM_DELAY_MAX) || 3000,
   TYPING_DELAY_MIN: parseInt(process.env.TYPING_DELAY_MIN) || 30,
   TYPING_DELAY_MAX: parseInt(process.env.TYPING_DELAY_MAX) || 80,
+
+  // Retry settings
+  MAX_RETRIES:  parseInt(process.env.MAX_RETRIES) || 0,       // 0 = no auto retry
+  RETRY_DELAY:  parseInt(process.env.RETRY_DELAY) || 15000,   // ms delay before retry
+  AUTO_RETRY:   process.env.AUTO_RETRY === 'true',            // auto retry without asking
 };
 
 // ─── USER AGENTS (Rotation) ─────────────────────────────────────────
@@ -690,20 +695,64 @@ async function main() {
   console.log('');
 
   const results = { success: [], failed: [] };
+  let retryQueue = [...accounts];
+  let retryCount = 0;
 
-  for (let i = 0; i < accounts.length; i++) {
-    const result = await processAccount(accounts[i], i + 1, accounts.length);
+  while (retryQueue.length > 0) {
+    const accountsToProcess = [...retryQueue];
+    retryQueue = [];
 
-    if (result.success) {
-      results.success.push(result.email);
-    } else {
-      results.failed.push({ email: result.email, error: result.error });
+    if (retryCount > 0) {
+      log.header(`RETRY ROUND ${retryCount} — ${accountsToProcess.length} account(s)`);
     }
 
-    if (i < accounts.length - 1) {
-      const delay = CONFIG.DELAY_BETWEEN + Math.floor(Math.random() * 5000);
-      log.info(`Waiting ${(delay / 1000).toFixed(1)}s before next account...`);
-      await sleep(delay);
+    for (let i = 0; i < accountsToProcess.length; i++) {
+      const result = await processAccount(accountsToProcess[i], i + 1, accountsToProcess.length);
+
+      if (result.success) {
+        results.success.push(result.email);
+      } else {
+        results.failed.push({ email: result.email, error: result.error });
+        retryQueue.push(accountsToProcess[i]);
+      }
+
+      if (i < accountsToProcess.length - 1) {
+        const delay = CONFIG.DELAY_BETWEEN + Math.floor(Math.random() * 5000);
+        log.info(`Waiting ${(delay / 1000).toFixed(1)}s before next account...`);
+        await sleep(delay);
+      }
+    }
+
+    // If there are failed accounts, decide what to do
+    if (retryQueue.length > 0) {
+      retryCount++;
+
+      if (CONFIG.AUTO_RETRY && retryCount <= CONFIG.MAX_RETRIES) {
+        log.warn(`${retryQueue.length} account(s) failed. Auto-retry in ${CONFIG.RETRY_DELAY / 1000}s...`);
+        await sleep(CONFIG.RETRY_DELAY);
+        continue;
+      }
+
+      if (!CONFIG.AUTO_RETRY && CONFIG.MAX_RETRIES !== 0) {
+        // Interactive mode: ask user
+        log.warn(`${retryQueue.length} account(s) failed:`);
+        retryQueue.forEach(a => log.step(`✗ ${a.email}`));
+        console.log('');
+        log.info(`Retry attempt ${retryCount}/${CONFIG.MAX_RETRIES}`);
+
+        const answer = await askQuestion('Retry failed accounts? (y/n): ');
+        if (answer.toLowerCase() === 'y') {
+          log.info(`Retrying in ${CONFIG.RETRY_DELAY / 1000}s...`);
+          await sleep(CONFIG.RETRY_DELAY);
+          continue;
+        } else {
+          log.info('Skipping retry.');
+          break;
+        }
+      }
+
+      // MAX_RETRIES reached or no retry configured
+      break;
     }
   }
 
@@ -718,6 +767,18 @@ async function main() {
 
   log.info(`Done accounts → ${CONFIG.DONE_FILE}`);
   log.info(`Results dir   → ${CONFIG.RESULTS_DIR}`);
+}
+
+// ─── ASK QUESTION (for interactive retry) ───────────────────────────
+function askQuestion(query) {
+  const readline = require('readline');
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise(resolve => {
+    rl.question(query, answer => {
+      rl.close();
+      resolve(answer);
+    });
+  });
 }
 
 main().catch(err => {
