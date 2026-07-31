@@ -11,6 +11,7 @@ Automasi login/logout Qoder CLI menggunakan Google SSO dengan Chrome Incognito. 
 - 🤖 **Human Behavior** — Mouse movements, random delays, typing simulation
 - 📱 **HP Verification Support** — Jeda 2 menit untuk verifikasi di HP
 - 📊 **Account Management** — Auto-move akun sukses ke `done_accounts.txt`
+- ⚙️ **Configuration-Driven** — Semua setting di `.env` (mandatory)
 
 ## 📋 Persyaratan
 
@@ -47,9 +48,7 @@ npm install
 copy accounts.txt.example accounts.txt
 ```
 
-### 4. Setup .env (Optional)
-
-Jika ingin mengubah konfigurasi (timeout, delay, dll), copy file `.env.example`:
+### 4. Setup .env (MANDATORY)
 
 **Windows:**
 ```bash
@@ -67,6 +66,12 @@ Kemudian edit file `.env` sesuai kebutuhan:
 # Browser Settings
 HEADLESS=false                    # true = no browser window, false = visible
 SLOW_MO=50                        # delay antar aksi (ms)
+
+# Chrome Path (optional, auto-detect if empty)
+CHROME_PATH=                      # contoh: C:\Program Files\Google\Chrome\Application\chrome.exe
+
+# Concurrency
+CONCURRENT=1                      # jumlah akun yang diproses bersamaan
 DELAY_BETWEEN=8000                # delay antar akun (ms)
 
 # Timeouts (milliseconds)
@@ -80,12 +85,16 @@ RANDOM_DELAY_MIN=1000             # min random delay (ms)
 RANDOM_DELAY_MAX=3000             # max random delay (ms)
 TYPING_DELAY_MIN=30               # min typing delay per karakter (ms)
 TYPING_DELAY_MAX=80               # max typing delay per karakter (ms)
+
+# Retry Settings
+MAX_RETRIES=3                     # max retry untuk akun yang gagal
+RETRY_DELAY=15000                 # delay sebelum retry (ms)
 ```
 
 **Catatan:**
-- File `.env` bersifat **optional**. Jika tidak ada, program akan menggunakan default values.
+- File `.env` bersifat **WAJIB**. Program tidak akan jalan tanpa `.env`.
 - `setup.bat` akan otomatis copy `.env.example` ke `.env` jika belum ada.
-- `login.bat` dan `login-headless.bat` juga akan auto-create `.env` jika belum ada.
+- Semua konfigurasi (HEADLESS, MAX_RETRIES, dll) diatur di `.env`.
 
 ### 5. Verify Installation
 
@@ -112,12 +121,7 @@ email3@gmail.com:password3
 
 **Windows:**
 ```bash
-login.bat
-```
-
-**With Interactive Retry (asks if you want to retry failed accounts):**
-```bash
-login-retry.bat
+run.bat
 ```
 
 **Manual:**
@@ -128,20 +132,22 @@ node index.js
 ### 3. Proses Otomatis
 
 Program akan:
-1. Buka Chrome Incognito
-2. Navigate ke Qoder login page
-3. Klik "Sign in with Google"
-4. Auto-fill email dan password
-5. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
-6. Login ke Qoder berhasil
-7. Logout dari Qoder CLI (`qodercli logout`)
-8. Pindah akun ke `done_accounts.txt`
-9. Lanjut ke akun berikutnya
+1. Baca konfigurasi dari `.env`
+2. Buka Chrome Incognito
+3. Navigate ke Qoder login page
+4. Klik "Sign in with Google"
+5. Auto-fill email dan password
+6. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
+7. Login ke Qoder berhasil
+8. Logout dari Qoder CLI (`qodercli logout`)
+9. Pindah akun ke `done_accounts.txt`
+10. Lanjut ke akun berikutnya
+11. Jika ada akun gagal, retry sesuai `MAX_RETRIES` di `.env`
 
-### 5. Cek Hasil
+### 4. Cek Hasil
 
 - **Akun sukses:** Ada di `done_accounts.txt`
-- **Akun gagal:** Tetap di `accounts.txt` (bisa retry)
+- **Akun gagal:** Tetap di `accounts.txt` (akan di-retry sesuai MAX_RETRIES)
 - **Screenshot error:** Ada di folder `results/`
 
 ## 🔄 Workflow
@@ -165,6 +171,9 @@ Account 2:
 
 Account 3:
   └─ ... same flow
+
+Failed Accounts:
+  └─ Retry up to MAX_RETRIES times
 ```
 
 ## 🛡️ Anti-Banned Features
@@ -185,17 +194,20 @@ qoder-sign/
 ├── package.json          # Dependencies
 ├── accounts.txt          # Input: akun yang akan diproses (copy dari .example)
 ├── accounts.txt.example  # Template accounts
-├── .env                  # Configuration (copy dari .example, optional)
+├── .env                  # Configuration (MANDATORY, copy dari .example)
 ├── .env.example          # Template configuration
-├── done_accounts.txt     # Output: akun yang sudah berhasil
+├── done_accounts.txt     # Output: akun yang sudah berhasil (duplicate checker)
 ├── results/              # Screenshot & JSON per akun
 ├── setup.bat             # Setup script (Windows)
-├── login.bat             # Run script (Windows)
-├── logout.bat            # Manual logout (Windows)
+├── run.bat               # Run script (Windows)
 └── README.md             # This file
 ```
 
 ## 🔧 Troubleshooting
+
+### .env not found
+- Copy `.env.example` ke `.env`
+- Program tidak akan jalan tanpa `.env`
 
 ### Chrome tidak terdeteksi
 - Set `CHROME_PATH` di `.env` dengan path Chrome di sistem kamu
@@ -210,9 +222,10 @@ npm install -g @anthropic-ai/qodercli
 - Cek email dan password di `accounts.txt`
 - Cek screenshot di folder `results/`
 - Pastikan tidak ada 2FA yang blocking
+- Program akan retry otomatis sesuai `MAX_RETRIES` di `.env`
 
 ### Verifikasi HP tidak muncul
-- Program sudah kasih jeda 2 menit (default)
+- Program sudah kasih jeda 2 menit (default `HP_PROMPT_WAIT=120000`)
 - Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `.env`
 
 ## 🔐 Security Note

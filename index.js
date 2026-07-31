@@ -1,7 +1,6 @@
 // ============================================================
 //  Qoder Sign — Auto Login/Logout Qoder CLI via Google SSO
-//  Pendekatan A: Jalankan qodercli login → capture URL → buka browser
-//  Anti-banned: Stealth + Random delays + Human behavior
+//  Configuration-driven via .env (mandatory)
 // ============================================================
 
 const puppeteer = require('puppeteer-extra');
@@ -11,32 +10,40 @@ const path = require('path');
 const os = require('os');
 const { spawn, execSync } = require('child_process');
 
-// ─── ENV (Load .env if exists) ──────────────────────────────────────
-if (fs.existsSync(path.join(__dirname, '.env'))) {
-  require('dotenv').config({ path: path.join(__dirname, '.env') });
+// ─── ENV (MANDATORY) ────────────────────────────────────────────────
+const envPath = path.join(__dirname, '.env');
+if (!fs.existsSync(envPath)) {
+  console.error('❌ ERROR: .env file not found!');
+  console.error('   Please copy .env.example to .env and configure it.');
+  process.exit(1);
 }
+require('dotenv').config({ path: envPath });
 
 // ─── STEALTH ────────────────────────────────────────────────────────
 puppeteer.use(StealthPlugin());
 
-// ─── CONFIG ─────────────────────────────────────────────────────────
+// ─── CONFIG (all from .env with defaults) ───────────────────────────
 const CONFIG = {
   // Files
   ACCOUNTS_FILE:    path.join(__dirname, 'accounts.txt'),
   DONE_FILE:        path.join(__dirname, 'done_accounts.txt'),
   RESULTS_DIR:      path.join(__dirname, 'results'),
 
-  // Browser - Anti-banned settings
-  HEADLESS:         process.env.HEADLESS === 'true',  // false = visible (default)
+  // Browser
+  HEADLESS:         process.env.HEADLESS === 'true',
   SLOW_MO:          parseInt(process.env.SLOW_MO) || 50,
+  CHROME_PATH:      process.env.CHROME_PATH || null,
+
+  // Concurrency
+  CONCURRENT:       parseInt(process.env.CONCURRENT) || 1,
   DELAY_BETWEEN:    parseInt(process.env.DELAY_BETWEEN) || 8000,
-  
+
   // Timeouts
   GOOGLE_TIMEOUT:   parseInt(process.env.GOOGLE_TIMEOUT) || 120000,
   HP_PROMPT_WAIT:   parseInt(process.env.HP_PROMPT_WAIT) || 120000,
   NAV_TIMEOUT:      parseInt(process.env.NAV_TIMEOUT) || 30000,
   QODERCLI_TIMEOUT: parseInt(process.env.QODERCLI_TIMEOUT) || 180000,
-  
+
   // Anti-banned: Randomization
   RANDOM_DELAY_MIN: parseInt(process.env.RANDOM_DELAY_MIN) || 1000,
   RANDOM_DELAY_MAX: parseInt(process.env.RANDOM_DELAY_MAX) || 3000,
@@ -44,9 +51,8 @@ const CONFIG = {
   TYPING_DELAY_MAX: parseInt(process.env.TYPING_DELAY_MAX) || 80,
 
   // Retry settings
-  MAX_RETRIES:  parseInt(process.env.MAX_RETRIES) || 0,       // 0 = no auto retry
-  RETRY_DELAY:  parseInt(process.env.RETRY_DELAY) || 15000,   // ms delay before retry
-  AUTO_RETRY:   process.env.AUTO_RETRY === 'true',            // auto retry without asking
+  MAX_RETRIES:  parseInt(process.env.MAX_RETRIES) || 0,
+  RETRY_DELAY:  parseInt(process.env.RETRY_DELAY) || 15000,
 };
 
 // ─── USER AGENTS (Rotation) ─────────────────────────────────────────
@@ -109,12 +115,12 @@ async function humanLikeMouseMovement(page) {
 // ─── SYSTEM CHROME DETECTION ────────────────────────────────────────
 function findSystemChrome() {
   // Check if CHROME_PATH is set in .env
-  if (process.env.CHROME_PATH) {
-    if (fs.existsSync(process.env.CHROME_PATH)) {
-      log.ok(`Using Chrome from .env: ${process.env.CHROME_PATH}`);
-      return process.env.CHROME_PATH;
+  if (CONFIG.CHROME_PATH) {
+    if (fs.existsSync(CONFIG.CHROME_PATH)) {
+      log.ok(`Using Chrome from .env: ${CONFIG.CHROME_PATH}`);
+      return CONFIG.CHROME_PATH;
     } else {
-      log.warn(`CHROME_PATH set in .env but file not found: ${process.env.CHROME_PATH}`);
+      log.warn(`CHROME_PATH set in .env but file not found: ${CONFIG.CHROME_PATH}`);
       log.info('Falling back to auto-detection...');
     }
   }
@@ -535,7 +541,7 @@ async function processAccount(account, idx, total) {
     }
 
     browser = await puppeteer.launch({
-      headless: false,
+      headless: CONFIG.HEADLESS,
       executablePath: chromePath,
       slowMo: CONFIG.SLOW_MO,
       defaultViewport: null,
@@ -551,7 +557,7 @@ async function processAccount(account, idx, total) {
         '--no-first-run',
         '--no-zygote',
         '--disable-gpu',
-        '--incognito',  // Force incognito mode
+        '--incognito',
       ],
     });
 
@@ -637,7 +643,6 @@ async function processAccount(account, idx, total) {
     log.info('Waiting for qodercli to complete login...');
     
     if (qodercliProc) {
-      // Wait for qodercli process to exit
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {
           log.warn('Timeout waiting for qodercli to complete');
@@ -732,9 +737,10 @@ async function main() {
   }
 
   log.info(`Found ${accounts.length} account(s) to process`);
-  log.info(`Mode: VISIBLE (browser terlihat untuk handle captcha/HP prompt)`);
+  log.info(`Mode: ${CONFIG.HEADLESS ? 'HEADLESS' : 'VISIBLE'}`);
+  log.info(`Concurrent: ${CONFIG.CONCURRENT}`);
+  log.info(`Max Retries: ${CONFIG.MAX_RETRIES}`);
   log.info(`HP Prompt Wait: ${CONFIG.HP_PROMPT_WAIT / 1000} detik`);
-  log.info(`Anti-banned: Stealth + Random delays + Human behavior + UA rotation`);
   console.log('');
 
   const results = { success: [], failed: [] };
@@ -749,6 +755,7 @@ async function main() {
       log.header(`RETRY ROUND ${retryCount} — ${accountsToProcess.length} account(s)`);
     }
 
+    // Process accounts (currently sequential, CONCURRENT > 1 would need Promise.all)
     for (let i = 0; i < accountsToProcess.length; i++) {
       const result = await processAccount(accountsToProcess[i], i + 1, accountsToProcess.length);
 
@@ -770,31 +777,13 @@ async function main() {
     if (retryQueue.length > 0) {
       retryCount++;
 
-      if (CONFIG.AUTO_RETRY && retryCount <= CONFIG.MAX_RETRIES) {
-        log.warn(`${retryQueue.length} account(s) failed. Auto-retry in ${CONFIG.RETRY_DELAY / 1000}s...`);
+      if (retryCount <= CONFIG.MAX_RETRIES) {
+        log.warn(`${retryQueue.length} account(s) failed. Retry in ${CONFIG.RETRY_DELAY / 1000}s...`);
         await sleep(CONFIG.RETRY_DELAY);
         continue;
       }
 
-      if (!CONFIG.AUTO_RETRY && CONFIG.MAX_RETRIES !== 0) {
-        // Interactive mode: ask user
-        log.warn(`${retryQueue.length} account(s) failed:`);
-        retryQueue.forEach(a => log.step(`✗ ${a.email}`));
-        console.log('');
-        log.info(`Retry attempt ${retryCount}/${CONFIG.MAX_RETRIES}`);
-
-        const answer = await askQuestion('Retry failed accounts? (y/n): ');
-        if (answer.toLowerCase() === 'y') {
-          log.info(`Retrying in ${CONFIG.RETRY_DELAY / 1000}s...`);
-          await sleep(CONFIG.RETRY_DELAY);
-          continue;
-        } else {
-          log.info('Skipping retry.');
-          break;
-        }
-      }
-
-      // MAX_RETRIES reached or no retry configured
+      // MAX_RETRIES reached
       break;
     }
   }
@@ -810,18 +799,6 @@ async function main() {
 
   log.info(`Done accounts → ${CONFIG.DONE_FILE}`);
   log.info(`Results dir   → ${CONFIG.RESULTS_DIR}`);
-}
-
-// ─── ASK QUESTION (for interactive retry) ───────────────────────────
-function askQuestion(query) {
-  const readline = require('readline');
-  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
-  return new Promise(resolve => {
-    rl.question(query, answer => {
-      rl.close();
-      resolve(answer);
-    });
-  });
 }
 
 main().catch(err => {
