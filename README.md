@@ -40,16 +40,11 @@ setup.bat
 npm install
 ```
 
-### 3. Setup Configuration Files
+### 3. Setup accounts.txt
 
-**Copy accounts.txt.example:**
+**Copy from template:**
 ```bash
 copy accounts.txt.example accounts.txt
-```
-
-**Copy .env.example (optional):**
-```bash
-copy .env.example .env
 ```
 
 ### 4. Verify Installation
@@ -57,7 +52,7 @@ copy .env.example .env
 Pastikan semua requirements terpenuhi:
 - ✅ Node.js terinstall (`node --version`)
 - ✅ Google Chrome terinstall
-- ✅ qodercli terinstall (`qodercli --version`)
+- ✅ qodercli terinstall (`npx qodercli --version`)
 
 ## 📝 Cara Pakai
 
@@ -73,31 +68,7 @@ email3@gmail.com:password3
 
 **Format:** `email:password` (satu akun per baris)
 
-### 2. Edit File `.env` (Optional)
-
-Jika ingin mengubah konfigurasi, edit file `.env`:
-
-```env
-# Browser Settings
-HEADLESS=false
-SLOW_MO=50
-
-# Timeouts (in milliseconds)
-DELAY_BETWEEN=8000
-HP_PROMPT_WAIT=120000
-NAV_TIMEOUT=30000
-GOOGLE_TIMEOUT=120000
-```
-
-**Penjelasan:**
-- `HEADLESS` - `true` untuk mode headless, `false` untuk visible
-- `SLOW_MO` - Delay antar aksi (ms)
-- `DELAY_BETWEEN` - Delay antar akun (ms)
-- `HP_PROMPT_WAIT` - Timeout verifikasi HP (ms)
-- `NAV_TIMEOUT` - Timeout navigasi (ms)
-- `GOOGLE_TIMEOUT` - Timeout Google login (ms)
-
-### 3. Jalankan Program
+### 2. Jalankan Program
 
 **Windows:**
 ```bash
@@ -109,7 +80,7 @@ login.bat
 node index.js
 ```
 
-### 4. Proses Otomatis
+### 3. Proses Otomatis
 
 Program akan:
 1. Buka Chrome Incognito
@@ -169,8 +140,6 @@ qoder-sign/
 ├── package.json          # Dependencies
 ├── accounts.txt          # Input: akun yang akan diproses (copy dari .example)
 ├── accounts.txt.example  # Template accounts
-├── .env                  # Configuration (copy dari .example)
-├── .env.example          # Template configuration
 ├── done_accounts.txt     # Output: akun yang sudah berhasil
 ├── results/              # Screenshot & JSON per akun
 ├── setup.bat             # Setup script (Windows)
@@ -197,7 +166,7 @@ npm install -g @anthropic-ai/qodercli
 
 ### Verifikasi HP tidak muncul
 - Program sudah kasih jeda 2 menit
-- Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `.env`
+- Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `index.js`
 
 ## 🔐 Security Note
 
