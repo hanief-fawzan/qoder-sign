@@ -181,7 +181,8 @@ async function startQoderCliLogin() {
   log.info('Starting qodercli login process...');
   
   return new Promise((resolve, reject) => {
-    const proc = spawn('qodercli', ['login'], {
+    // Use npx to run locally installed qodercli (non-admin mode)
+    const proc = spawn('npx', ['qodercli', 'login'], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: os.platform() === 'win32',
     });
@@ -259,7 +260,8 @@ function logoutFromQoderCLI() {
   log.info('Logging out from Qoder CLI...');
   
   try {
-    execSync('qodercli logout', { 
+    // Use npx to run locally installed qodercli (non-admin mode)
+    execSync('npx qodercli logout', { 
       stdio: 'pipe', 
       timeout: 10000,
       windowsHide: true 

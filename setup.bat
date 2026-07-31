@@ -1,11 +1,12 @@
 @echo off
 REM ============================================================
-REM  Qoder Sign - Setup
+REM  Qoder Sign - Setup (Non-Admin Mode)
 REM  Install Node.js dependencies + check/install qodercli
+REM  For users without admin rights - use npm.cmd install (local)
 REM ============================================================
 
 echo ============================================================
-echo  Qoder Sign - Setup
+echo  Qoder Sign - Setup (Non-Admin Mode)
 echo ============================================================
 echo.
 
@@ -32,34 +33,35 @@ echo [i] npm found:
 call npm --version
 echo.
 
-REM Install dependencies
-echo [i] Installing Node.js dependencies...
-call npm install
+REM Install Node.js dependencies (local, non-admin)
+echo [i] Installing Node.js dependencies (local)...
+call npm.cmd install
 if errorlevel 1 (
     echo [!] Failed to install dependencies
+    echo     Make sure you have write permission in this folder
     pause
     exit /b 1
 )
 echo [+] Dependencies installed
 echo.
 
-REM Check qodercli
+REM Check qodercli (local install for non-admin)
 echo [i] Checking qodercli...
-qodercli --version >nul 2>&1
+call npx qodercli --version >nul 2>&1
 if errorlevel 1 (
     echo [!] qodercli not found!
-    echo [i] Installing qodercli...
-    call npm install -g @anthropic-ai/qodercli
+    echo [i] Installing qodercli locally (non-admin mode)...
+    call npm.cmd install @anthropic-ai/qodercli
     if errorlevel 1 (
         echo [!] Failed to install qodercli
-        echo     Try manually: npm install -g @anthropic-ai/qodercli
+        echo     Try manually: npm.cmd install @anthropic-ai/qodercli
         pause
         exit /b 1
     )
-    echo [+] qodercli installed successfully
+    echo [+] qodercli installed successfully (local)
 ) else (
     echo [+] qodercli found:
-    qodercli --version
+    call npx qodercli --version
 )
 echo.
 
