@@ -247,6 +247,30 @@ function isAlreadyDone(account) {
   return doneLines.includes(account.raw);
 }
 
+// ─── FIND QODERCLI EXECUTABLE ────────────────────────────────────────
+function findQoderCli() {
+  const os = require('os');
+  const path = require('path');
+  const fs = require('fs');
+  
+  // Common install locations
+  const locations = [
+    path.join(os.homedir(), '.qoder', 'qodercli.exe'),
+    path.join(os.homedir(), '.qoder', 'qodercli'),
+    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli'),
+  ];
+  
+  for (const loc of locations) {
+    if (fs.existsSync(loc)) {
+      return loc;
+    }
+  }
+  
+  // Fallback to PATH
+  return 'qodercli';
+}
+
 // ─── QODERCLI LOGIN (Interactive Mode with /login command) ──────────
 async function startQoderCliLogin() {
   log.info('Starting qodercli interactive login process...');
@@ -258,8 +282,12 @@ async function startQoderCliLogin() {
     // Use PowerShell on Windows, fallback to default shell
     const shellCmd = os.platform() === 'win32' ? 'powershell.exe' : true;
     
-    // Spawn qodercli in interactive mode (command available after npm install)
-    const proc = spawn('qodercli', [], {
+    // Find qodercli executable
+    const qodercliPath = findQoderCli();
+    log.step(`Using qodercli from: ${qodercliPath}`);
+    
+    // Spawn qodercli in interactive mode
+    const proc = spawn(qodercliPath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: shellCmd,
       env: env,
