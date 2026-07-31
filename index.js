@@ -719,7 +719,7 @@ async function processAccount(account, idx, total) {
     // ── 6. Wait for qodercli to complete ──────────────────────────
     log.info('Waiting for qodercli to complete login...');
     
-    if (qodercliProc) {
+    if (qodercliProc && !qodercliProc.killed) {
       await new Promise((resolve) => {
         const timeout = setTimeout(() => {
           log.warn('Timeout waiting for qodercli to complete');
@@ -737,6 +737,10 @@ async function processAccount(account, idx, total) {
           resolve();
         });
       });
+    } else {
+      // qodercli already exited, wait a bit for server to process
+      log.step('qodercli already exited, waiting for server to process...');
+      await randomDelay(3000, 5000);
     }
 
     await randomDelay(2000, 3000);
