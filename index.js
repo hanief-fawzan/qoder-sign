@@ -358,6 +358,7 @@ async function startQoderCliLogin() {
 
     // Process exit - only resolve when process completes
     proc.on('close', (code) => {
+      clearTimeout(timeout);
       if (code === 0) {
         log.ok('qodercli login completed successfully');
         resolve({ success: true, url: loginUrl, output });
@@ -369,6 +370,7 @@ async function startQoderCliLogin() {
 
     // Process error
     proc.on('error', (err) => {
+      clearTimeout(timeout);
       log.error(`Failed to start qodercli: ${err.message}`);
       reject(err);
     });
@@ -380,12 +382,7 @@ async function startQoderCliLogin() {
       resolve({ success: false, url: loginUrl, output, timeout: true });
     }, CONFIG.QODERCLI_TIMEOUT || 180000); // 3 minutes default
 
-    // Clear timeout when process exits
-    proc.on('close', () => {
-      clearTimeout(timeout);
-    });
-
-    // Resolve immediately when we get URL (don't wait for process)
+    // Resolve when we get URL (so browser can open), but keep process alive
     const checkUrl = setInterval(() => {
       if (loginUrl) {
         clearTimeout(timeout);
