@@ -85,6 +85,7 @@ echo ============================================================
 echo.
 echo  Next steps:
 echo    1. Edit accounts.txt with your Google credentials
-echo    2. Double-click login.bat
+echo    2. Edit .env to configure settings (optional)
+echo    3. Double-click login.bat (visible) or login-headless.bat
 echo.
 pause

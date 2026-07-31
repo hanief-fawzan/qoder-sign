@@ -1,6 +1,6 @@
 @echo off
 REM ============================================================
-REM  Qoder Sign - Login (HEADLESS mode)
+REM  Qoder Sign - Login (Headless Mode)
 REM  Browser runs in background, no visible window
 REM ============================================================
 
@@ -9,17 +9,16 @@ echo ============================================================
 echo  Qoder Sign - Login (Headless Mode)
 echo ============================================================
 echo.
-echo  Browser will run in HEADLESS mode (no visible window)
-echo.
 
-node index.js login --headless
-
-if errorlevel 1 (
+REM Check if .env exists, if not copy from .env.example
+if not exist .env (
+    echo [i] Creating .env from template...
+    copy .env.example .env >nul
+    echo [+] .env created
     echo.
-    echo [!] Login failed. Check the output above.
-    pause
-    exit /b 1
 )
 
-echo.
-pause
+REM Override HEADLESS to true via command line
+set HEADLESS=true
+node index.js
+if errorlevel 1 pause

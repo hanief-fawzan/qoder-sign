@@ -140,6 +140,8 @@ qoder-sign/
 ├── package.json          # Dependencies
 ├── accounts.txt          # Input: akun yang akan diproses (copy dari .example)
 ├── accounts.txt.example  # Template accounts
+├── .env                  # Configuration (copy dari .example, optional)
+├── .env.example          # Template configuration
 ├── done_accounts.txt     # Output: akun yang sudah berhasil
 ├── results/              # Screenshot & JSON per akun
 ├── setup.bat             # Setup script (Windows)

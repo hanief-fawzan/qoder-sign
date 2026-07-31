@@ -11,6 +11,11 @@ const path = require('path');
 const os = require('os');
 const { spawn, execSync } = require('child_process');
 
+// ─── ENV (Load .env if exists) ──────────────────────────────────────
+if (fs.existsSync(path.join(__dirname, '.env'))) {
+  require('dotenv').config({ path: path.join(__dirname, '.env') });
+}
+
 // ─── STEALTH ────────────────────────────────────────────────────────
 puppeteer.use(StealthPlugin());
 
@@ -22,21 +27,21 @@ const CONFIG = {
   RESULTS_DIR:      path.join(__dirname, 'results'),
 
   // Browser - Anti-banned settings
-  HEADLESS:         false,    // false = visible (WAJIB untuk handle captcha/HP prompt)
-  SLOW_MO:          50,       // ms delay antar aksi (lebih natural)
-  DELAY_BETWEEN:    8000,     // ms delay antar akun (8 detik)
+  HEADLESS:         process.env.HEADLESS === 'true',  // false = visible (default)
+  SLOW_MO:          parseInt(process.env.SLOW_MO) || 50,
+  DELAY_BETWEEN:    parseInt(process.env.DELAY_BETWEEN) || 8000,
   
   // Timeouts
-  GOOGLE_TIMEOUT:   120000,   // ms max tunggu Google login flow (2 menit)
-  HP_PROMPT_WAIT:   120000,   // ms max tunggu user klik OK di HP (2 menit)
-  NAV_TIMEOUT:      30000,    // ms max tunggu navigasi
-  QODERCLI_TIMEOUT: 180000,   // ms max tunggu qodercli login selesai (3 menit)
+  GOOGLE_TIMEOUT:   parseInt(process.env.GOOGLE_TIMEOUT) || 120000,
+  HP_PROMPT_WAIT:   parseInt(process.env.HP_PROMPT_WAIT) || 120000,
+  NAV_TIMEOUT:      parseInt(process.env.NAV_TIMEOUT) || 30000,
+  QODERCLI_TIMEOUT: parseInt(process.env.QODERCLI_TIMEOUT) || 180000,
   
   // Anti-banned: Randomization
-  RANDOM_DELAY_MIN: 1000,     // ms min random delay
-  RANDOM_DELAY_MAX: 3000,     // ms max random delay
-  TYPING_DELAY_MIN: 30,       // ms min typing delay
-  TYPING_DELAY_MAX: 80,       // ms max typing delay
+  RANDOM_DELAY_MIN: parseInt(process.env.RANDOM_DELAY_MIN) || 1000,
+  RANDOM_DELAY_MAX: parseInt(process.env.RANDOM_DELAY_MAX) || 3000,
+  TYPING_DELAY_MIN: parseInt(process.env.TYPING_DELAY_MIN) || 30,
+  TYPING_DELAY_MAX: parseInt(process.env.TYPING_DELAY_MAX) || 80,
 };
 
 // ─── USER AGENTS (Rotation) ─────────────────────────────────────────
