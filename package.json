@@ -1,0 +1,17 @@
+{
+  "name": "qoder-sign",
+  "version": "1.0.0",
+  "description": "Auto login/logout Qoder CLI via Google SSO with stealth Puppeteer",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js login",
+    "login": "node index.js login",
+    "logout": "node index.js logout",
+    "headless": "node index.js login --headless"
+  },
+  "dependencies": {
+    "puppeteer": "^24.0.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2"
+  }
+}

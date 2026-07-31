@@ -1,0 +1,16 @@
+# Dependencies
+node_modules/
+
+# Accounts (sensitive)
+accounts.txt
+
+# Results
+results/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
