@@ -522,48 +522,95 @@ async function handleGoogleLogin(page, email, password) {
       return true;
     }
 
-    // Handle "I understand" / "Saya mengerti" speedbump
-    const understandBtn = await page.$(
-      'button:has-text("I understand"), button:has-text("Saya mengerti")'
-    );
-    if (understandBtn) {
-      log.step('Clicking "I understand" speedbump...');
-      await humanLikeMouseMovement(page);
-      await understandBtn.click();
-      await randomDelay(2000, 3000);
-    }
-
-    // Handle consent (Lanjutkan / Continue / Allow)
-    const consentBtn = await page.$(
-      'button:has-text("Lanjutkan"), button:has-text("Continue"), ' +
-      'button:has-text("Allow"), button:has-text("Izinkan"), ' +
-      '#submit_approve_access'
-    );
-    if (consentBtn) {
-      log.step('Clicking consent button...');
-      await humanLikeMouseMovement(page);
-      await consentBtn.click();
-      await randomDelay(3000, 4000);
-    }
-
-    // Handle "Advanced" → "Go to" (unverified app)
-    const advancedBtn = await page.$(
-      'a:has-text("Advanced"), a:has-text("Lanjutan")'
-    );
-    if (advancedBtn) {
-      log.step('Clicking Advanced...');
-      await humanLikeMouseMovement(page);
-      await advancedBtn.click();
-      await randomDelay(1500, 2500);
-      const goToBtn = await page.$(
-        'a:has-text("Go to"), a:has-text("unsafe"), a:has-text("proceed")'
-      );
-      if (goToBtn) {
-        log.step('Clicking Go to...');
-        await humanLikeMouseMovement(page);
-        await goToBtn.click();
-        await randomDelay(2000, 3000);
+    // Multi-language consent detection using JS evaluation
+    const consentResult = await page.evaluate(() => {
+      // Priority 1: Known IDs
+      const knownIds = ['confirm', 'submit_approve_access', 'approve_button',
+                       'next', 'identifierNext', 'passwordNext'];
+      for (const id of knownIds) {
+        const el = document.getElementById(id);
+        if (el && el.offsetParent !== null) {
+          el.click();
+          return { clicked: true, type: 'id', value: id };
+        }
       }
+
+      // Priority 2: Known names
+      const knownNames = ['confirm', 'continue', 'approve', 'accept'];
+      for (const name of knownNames) {
+        const el = document.querySelector(`[name="${name}"]`);
+        if (el && el.offsetParent !== null) {
+          el.click();
+          return { clicked: true, type: 'name', value: name };
+        }
+      }
+
+      // Priority 3: Text matching (multi-language)
+      const buttons = document.querySelectorAll(
+        'button, [role="button"], span[role="button"], input[type="submit"], ' +
+        'span.VfPpkd-vQzf8d, div.VfPpkd-RLmnJb, [jsname="V67aGc"]'
+      );
+      const consentTexts = [
+        'i understand', 'i agree', 'agree', 'allow', 'continue', 'next',
+        'approve', 'confirm', 'accept', 'got it', 'accept all', 'done',
+        'i accept', 'accept & continue',
+        'saya mengerti', 'saya setuju', 'setuju', 'lanjutkan', 'terima',
+        'izinkan', 'konfirmasi', 'mengerti', 'oke', 'ya'
+      ];
+      for (const btn of buttons) {
+        const txt = (btn.textContent || btn.value || '').toLowerCase().trim();
+        if (consentTexts.some(t => txt.includes(t) || txt === t)) {
+          btn.click();
+          if (btn.tagName === 'SPAN' && btn.parentElement && btn.parentElement.tagName === 'BUTTON') {
+            btn.parentElement.click();
+          }
+          return { clicked: true, type: 'text', value: txt };
+        }
+      }
+
+      // Priority 4: "Advanced" link
+      const advEl = document.querySelector('#advancedButton') ||
+                    document.querySelector('[id*="advanced"]');
+      if (advEl) {
+        advEl.click();
+        return { clicked: true, type: 'advanced', value: 'advanced' };
+      }
+      for (const el of document.querySelectorAll('a, button, span')) {
+        const t = (el.textContent || '').toLowerCase();
+        if (t.includes('advanced') || t.includes('lanjutan')) {
+          el.click();
+          return { clicked: true, type: 'advanced', value: 'advanced (text)' };
+        }
+      }
+
+      return { clicked: false };
+    });
+
+    if (consentResult.clicked) {
+      log.step(`Consent clicked: ${consentResult.type} - ${consentResult.value}`);
+      await randomDelay(1500, 2500);
+
+      // If we clicked "Advanced", wait for "Go to" link
+      if (consentResult.type === 'advanced') {
+        await randomDelay(1000, 1500);
+        const unsafeClicked = await page.evaluate(() => {
+          const links = document.querySelectorAll('a, button, [role="button"]');
+          for (const el of links) {
+            const t = (el.textContent || '').toLowerCase();
+            if (t.includes('go to') || t.includes('unsafe') || t.includes('proceed') ||
+                t.includes('lanjutkan') || t.includes('ke')) {
+              el.click();
+              return true;
+            }
+          }
+          return false;
+        });
+        if (unsafeClicked) {
+          log.step('Clicked "Go to unsafe" link');
+          await randomDelay(2000, 3000);
+        }
+      }
+      continue;
     }
 
     // Handle security challenge / HP verification
@@ -666,7 +713,7 @@ async function processAccount(account, idx, total) {
     await humanLikeScroll(page);
     await humanLikeMouseMovement(page);
 
-    // ── 4. Click Google SSO button ────────────────────────────────
+    // ── 4. Click Google SSO button (with retry logic) ─────────────
     log.step('Looking for Google SSO button...');
 
     const googleSelectors = [
@@ -674,33 +721,86 @@ async function processAccount(account, idx, total) {
       'a:has-text("Google")',
       '[class*="google" i]',
       'button:has-text("Sign in with Google")',
+      'a:has-text("Sign in with Google")',
+      'button[data-provider="google"]',
+      '[aria-label*="Google" i]',
+      'img[alt*="Google" i]',
+      'div:has-text("Google")',
+      '[href*="google"]',
+      'button:has-text("google")',
+      'a:has-text("google")',
       'span:has-text("Google")',
-      '[data-provider="google"]',
+      'span:has-text("google")',
     ];
 
     let googleBtn = null;
-    for (const sel of googleSelectors) {
-      googleBtn = await page.$(sel);
-      if (googleBtn) {
-        const isVisible = await googleBtn.isIntersectingViewport();
-        if (isVisible) break;
-        googleBtn = null;
+    const maxRetries = 5;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      log.step(`Google SSO detection attempt ${attempt}/${maxRetries}...`);
+      
+      // Try CSS selectors first
+      for (const sel of googleSelectors) {
+        try {
+          const el = await page.$(sel);
+          if (el) {
+            const isVisible = await el.isIntersectingViewport();
+            if (isVisible) {
+              googleBtn = el;
+              log.step(`Found via selector: ${sel}`);
+              break;
+            }
+          }
+        } catch (e) {
+          // Selector might not be valid, continue
+        }
+      }
+      
+      // JS fallback - search all clickable elements
+      if (!googleBtn) {
+        const clicked = await page.evaluate(() => {
+          const els = document.querySelectorAll(
+            'button, a, div[role="button"], span[role="button"], ' +
+            '[onclick], [class*="btn"], [class*="button"], [class*="social"], ' +
+            '[class*="oauth"], [class*="provider"], [class*="sso"]'
+          );
+          for (const el of els) {
+            const txt = (el.textContent || el.innerText || el.getAttribute('aria-label') || '').toLowerCase();
+            if (txt.includes('google')) {
+              el.scrollIntoView({block: 'center'});
+              return el;
+            }
+          }
+          // Check images with Google-related alt/src
+          const imgs = document.querySelectorAll('img');
+          for (const img of imgs) {
+            const alt = (img.alt || '').toLowerCase();
+            const src = (img.src || '').toLowerCase();
+            if (alt.includes('google') || src.includes('google')) {
+              const parent = img.closest('button, a, [role="button"]') || img;
+              parent.scrollIntoView({block: 'center'});
+              return parent;
+            }
+          }
+          return null;
+        });
+        
+        if (clicked) {
+          googleBtn = await page.evaluateHandle((el) => el, clicked);
+          log.step('Found via JS evaluation');
+        }
+      }
+      
+      if (googleBtn) break;
+      
+      if (attempt < maxRetries) {
+        log.step(`Not found, retrying in 2s...`);
+        await randomDelay(1500, 2500);
       }
     }
 
-    if (!googleBtn) {
-      googleBtn = await page.evaluateHandle(() => {
-        const els = document.querySelectorAll('button, a, div[role="button"], span');
-        for (const el of els) {
-          const txt = (el.textContent || '').toLowerCase();
-          if (txt.includes('google')) return el;
-        }
-        return null;
-      });
-    }
-
     if (!googleBtn || !await googleBtn.asElement()) {
-      throw new Error('Google SSO button not found');
+      throw new Error('Google SSO button not found after 5 attempts');
     }
 
     log.step('Clicking Google SSO...');
