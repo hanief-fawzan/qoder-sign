@@ -307,32 +307,26 @@ function findFileRecursive(dir, filename, maxDepth) {
   return null;
 }
 
-// ─── QODERCLI LOGIN (Interactive Mode with /login command) ──────────
+// ─── QODERCLI LOGIN (Direct login command) ──────────────────────────
 async function startQoderCliLogin() {
-  log.info('Starting qodercli interactive login process...');
+  log.info('Starting qodercli login process...');
   
   return new Promise((resolve, reject) => {
     // Set NO_BROWSER=true to force URL output instead of opening browser
     const env = { ...process.env, NO_BROWSER: 'true' };
     
-    // Use PowerShell on Windows, fallback to default shell
-    const shellCmd = os.platform() === 'win32' ? 'powershell.exe' : true;
-    
     // Find qodercli executable
     const qodercliPath = findQoderCli();
     log.step(`Using qodercli from: ${qodercliPath}`);
     
-    // Spawn qodercli in interactive mode with NO_BROWSER=true
-    const proc = spawn(qodercliPath, [], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      shell: shellCmd,
+    // Try direct login command first
+    const proc = spawn(qodercliPath, ['login'], {
+      stdio: ['ignore', 'pipe', 'pipe'],
       env: env,
     });
 
     let output = '';
     let loginUrl = null;
-    let initialMenuHandledled = false;
-    let loginMethodSelected = false;
 
     // Capture stdout
     proc.stdout.on('data', (data) => {
@@ -340,37 +334,11 @@ async function startQoderCliLogin() {
       output += text;
       log.step(`qodercli: ${text.trim()}`);
 
-      // Step 1: Handle initial menu "Sign in to continue" / "Exit"
-      if (!initialMenuHandledled && text.includes('Sign in to continue')) {
-        initialMenuHandledled = true;
-        log.step('Selecting "Sign in to continue" (option 1)...');
-        proc.stdin.write('\n'); // Press Enter to select option 1
-      }
-
-      // Step 2: Auto-select "Browser" login method (option 1)
-      // With NO_BROWSER=true, this will print URL instead of opening browser
-      if (initialMenuHandledled && !loginMethodSelected) {
-        // Detect login method selection prompt
-        if (text.includes('Login with Qoder Platform') || 
-            text.includes('Browser') || 
-            text.includes('sign-in method') ||
-            text.includes('Select') ||
-            text.includes('1.') ||
-            text.includes('2.')) {
-          loginMethodSelected = true;
-          log.step('Auto-selecting Browser login method (option 1)...');
-          log.step('NO_BROWSER=true is set, URL will be printed instead of opening browser');
-          proc.stdin.write('1\n'); // Select option 1: Browser login
-        }
-      }
-
-      // Step 3: Look for URL in output (after login method selected)
-      if (loginMethodSelected) {
-        const urlMatch = text.match(/https?:\/\/[^\s]+/);
-        if (urlMatch && !loginUrl) {
-          loginUrl = urlMatch[0];
-          log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
-        }
+      // Look for URL in output
+      const urlMatch = text.match(/https?:\/\/[^\s]+/);
+      if (urlMatch && !loginUrl) {
+        loginUrl = urlMatch[0];
+        log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
       }
     });
 
@@ -381,18 +349,19 @@ async function startQoderCliLogin() {
       log.step(`qodercli (stderr): ${text.trim()}`);
 
       // Look for URL in stderr too
-      if (loginMethodSelected) {
-        const urlMatch = text.match(/https?:\/\/[^\s]+/);
-        if (urlMatch && !loginUrl) {
-          loginUrl = urlMatch[0];
-          log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
-        }
+      const urlMatch = text.match(/https?:\/\/[^\s]+/);
+      if (urlMatch && !loginUrl) {
+        loginUrl = urlMatch[0];
+        log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
       }
     });
 
     // Process exit
     proc.on('close', (code) => {
-      if (code === 0) {
+      if (loginUrl) {
+        log.ok('Login URL captured successfully');
+        resolve({ success: true, url: loginUrl, output });
+      } else if (code === 0) {
         log.ok('qodercli login completed successfully');
         resolve({ success: true, url: loginUrl, output });
       } else {
