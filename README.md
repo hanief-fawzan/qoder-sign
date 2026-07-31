@@ -24,10 +24,39 @@ Automasi login/logout Qoder CLI menggunakan Google SSO dengan Chrome Incognito. 
 
 ### 1. Clone Repository
 
+**Cara 1: Menggunakan Git (Recommended)**
+
+Buka Command Prompt atau PowerShell, lalu jalankan:
+
 ```bash
 git clone https://github.com/hanief-fawzan/qoder-sign.git
 cd qoder-sign
 ```
+
+**Catatan:** Repository ini PUBLIC, jadi kamu TIDAK PERLU login GitHub untuk clone.
+
+**Cara 2: Download ZIP (Tanpa Git)**
+
+Jika kamu tidak punya Git atau tidak ingin install:
+
+1. Buka browser ke: https://github.com/hanief-fawzan/qoder-sign
+2. Klik tombol hijau **"Code"** di pojok kanan atas
+3. Pilih **"Download ZIP"**
+4. Extract ZIP ke folder yang kamu inginkan
+5. Buka Command Prompt di folder tersebut
+
+**Cara 3: Menggunakan GitHub Desktop (GUI)**
+
+Jika kamu lebih suka interface grafis:
+
+1. Download & install [GitHub Desktop](https://desktop.github.com/)
+2. Klik **"File"** → **"Clone repository..."**
+3. Pilih tab **"URL"**
+4. Paste: `https://github.com/hanief-fawzan/qoder-sign.git`
+5. Pilih folder tujuan
+6. Klik **"Clone"**
+
+**Tidak perlu login GitHub** untuk semua cara di atas karena repository ini public.
 
 ### 2. Install Dependencies
 
