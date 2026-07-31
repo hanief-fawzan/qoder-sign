@@ -47,18 +47,23 @@ echo.
 
 REM Check qodercli
 echo [i] Checking qodercli...
-call npx.cmd @qoder-ai/qodercli --version >nul 2>&1
+qodercli --version >nul 2>&1
 if errorlevel 1 (
     echo [!] qodercli not found!
-    echo [i] Installing qodercli locally...
-    call npm.cmd install @qoder-ai/qodercli
-    if errorlevel 1 (
-        echo [!] Failed to install qodercli
-        echo     Try manually: npm install @qoder-ai/qodercli
-        pause
-        exit /b 1
-    )
-    echo [+] qodercli installed successfully
+    echo.
+    echo [i] Qoder CLI is a separate application that must be installed first.
+    echo     Please install it using one of these methods:
+    echo.
+    echo     Method 1 - PowerShell (Recommended):
+    echo       irm https://qoder.com/install.ps1 ^| iex
+    echo.
+    echo     Method 2 - Download installer:
+    echo       Visit https://qoder.com/cli
+    echo.
+    echo     After installation, run setup.bat again.
+    echo.
+    pause
+    exit /b 1
 ) else (
     echo [+] qodercli found
 )
