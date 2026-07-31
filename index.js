@@ -252,10 +252,11 @@ async function startQoderCliLogin() {
   log.info('Starting qodercli login process...');
   
   return new Promise((resolve, reject) => {
-    // Use npx to run locally installed qodercli (non-admin mode)
-    const proc = spawn('npx', ['qodercli', 'login'], {
+    // Use Windows Terminal on Windows, fallback to default shell
+    const shellCmd = os.platform() === 'win32' ? 'wt.exe' : true;
+    const proc = spawn('npx', ['@qoder-ai/qodercli', 'login'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: os.platform() === 'win32',
+      shell: shellCmd,
     });
 
     let output = '';
@@ -332,7 +333,7 @@ function logoutFromQoderCLI() {
   
   try {
     // Use npx to run locally installed qodercli (non-admin mode)
-    execSync('npx qodercli logout', { 
+    execSync('npx @qoder-ai/qodercli logout', { 
       stdio: 'pipe', 
       timeout: 10000,
       windowsHide: true 
@@ -557,11 +558,10 @@ async function processAccount(account, idx, total) {
         '--no-first-run',
         '--no-zygote',
         '--disable-gpu',
-        '--incognito',
       ],
     });
 
-    const context = await browser.createIncognitoBrowserContext();
+    const context = await browser.createBrowserContext({ incognito: true });
     const page = await context.newPage();
     
     const userAgent = randomUserAgent();
@@ -621,7 +621,6 @@ async function processAccount(account, idx, total) {
     }
 
     if (!googleBtn || !await googleBtn.asElement()) {
-      await page.screenshot({ path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_no_google_btn.png`) });
       throw new Error('Google SSO button not found');
     }
 
@@ -635,7 +634,6 @@ async function processAccount(account, idx, total) {
     const loginOk = await handleGoogleLogin(page, email, password);
 
     if (!loginOk) {
-      await page.screenshot({ path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_login_fail.png`) });
       throw new Error('Google login failed or timed out');
     }
 
@@ -693,15 +691,6 @@ async function processAccount(account, idx, total) {
 
   } catch (err) {
     log.error(`${email} — FAILED: ${err.message}`);
-    
-    if (browser) {
-      const pages = await browser.pages();
-      if (pages.length > 0) {
-        await pages[0].screenshot({
-          path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_error.png`)
-        }).catch(() => {});
-      }
-    }
 
     const resultFile = path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}.json`);
     fs.writeFileSync(resultFile, JSON.stringify({
