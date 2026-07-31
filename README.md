@@ -47,7 +47,47 @@ npm install
 copy accounts.txt.example accounts.txt
 ```
 
-### 4. Verify Installation
+### 4. Setup .env (Optional)
+
+Jika ingin mengubah konfigurasi (timeout, delay, dll), copy file `.env.example`:
+
+**Windows:**
+```bash
+copy .env.example .env
+```
+
+**Linux/Mac:**
+```bash
+cp .env.example .env
+```
+
+Kemudian edit file `.env` sesuai kebutuhan:
+
+```env
+# Browser Settings
+HEADLESS=false                    # true = no browser window, false = visible
+SLOW_MO=50                        # delay antar aksi (ms)
+DELAY_BETWEEN=8000                # delay antar akun (ms)
+
+# Timeouts (milliseconds)
+GOOGLE_TIMEOUT=120000             # max waktu login Google (2 menit)
+HP_PROMPT_WAIT=120000             # max waktu tunggu verifikasi HP (2 menit)
+NAV_TIMEOUT=30000                 # timeout navigasi (30 detik)
+QODERCLI_TIMEOUT=180000           # max waktu qodercli login (3 menit)
+
+# Anti-banned: Randomization
+RANDOM_DELAY_MIN=1000             # min random delay (ms)
+RANDOM_DELAY_MAX=3000             # max random delay (ms)
+TYPING_DELAY_MIN=30               # min typing delay per karakter (ms)
+TYPING_DELAY_MAX=80               # max typing delay per karakter (ms)
+```
+
+**Catatan:**
+- File `.env` bersifat **optional**. Jika tidak ada, program akan menggunakan default values.
+- `setup.bat` akan otomatis copy `.env.example` ke `.env` jika belum ada.
+- `login.bat` dan `login-headless.bat` juga akan auto-create `.env` jika belum ada.
+
+### 5. Verify Installation
 
 Pastikan semua requirements terpenuhi:
 - ✅ Node.js terinstall (`node --version`)
