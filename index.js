@@ -250,25 +250,61 @@ function isAlreadyDone(account) {
 // ─── FIND QODERCLI EXECUTABLE ────────────────────────────────────────
 function findQoderCli() {
   const os = require('os');
-  const path = require('path');
+  const pathMod = require('path');
   const fs = require('fs');
   
-  // Common install locations
+  // Common install locations (exact paths)
   const locations = [
-    path.join(os.homedir(), '.qoder', 'qodercli.exe'),
-    path.join(os.homedir(), '.qoder', 'qodercli'),
-    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli.exe'),
-    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli'),
+    pathMod.join(os.homedir(), '.qoder', 'bin', 'qodercli', 'qodercli.exe'),
+    pathMod.join(os.homedir(), '.qoder', 'bin', 'qodercli', 'qodercli'),
+    pathMod.join(os.homedir(), '.qoder', 'qodercli.exe'),
+    pathMod.join(os.homedir(), '.qoder', 'qodercli'),
+    pathMod.join(os.homedir(), 'AppData', 'Local', 'qoder', 'bin', 'qodercli', 'qodercli.exe'),
+    pathMod.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli.exe'),
   ];
   
   for (const loc of locations) {
     if (fs.existsSync(loc)) {
+      log.step(`Found qodercli at: ${loc}`);
       return loc;
     }
   }
   
+  // Recursive search in .qoder directory
+  const qoderDir = pathMod.join(os.homedir(), '.qoder');
+  if (fs.existsSync(qoderDir)) {
+    const exeName = os.platform() === 'win32' ? 'qodercli.exe' : 'qodercli';
+    const found = findFileRecursive(qoderDir, exeName, 3);
+    if (found) {
+      log.step(`Found qodercli via search: ${found}`);
+      return found;
+    }
+  }
+  
   // Fallback to PATH
+  log.warn('qodercli not found in common locations, falling back to PATH');
   return 'qodercli';
+}
+
+function findFileRecursive(dir, filename, maxDepth) {
+  const fs = require('fs');
+  const pathMod = require('path');
+  if (maxDepth <= 0) return null;
+  
+  try {
+    const entries = fs.readdirSync(dir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = pathMod.join(dir, entry.name);
+      if (entry.isFile() && entry.name === filename) {
+        return fullPath;
+      }
+      if (entry.isDirectory()) {
+        const found = findFileRecursive(fullPath, filename, maxDepth - 1);
+        if (found) return found;
+      }
+    }
+  } catch (_) {}
+  return null;
 }
 
 // ─── QODERCLI LOGIN (Interactive Mode with /login command) ──────────
@@ -276,7 +312,7 @@ async function startQoderCliLogin() {
   log.info('Starting qodercli interactive login process...');
   
   return new Promise((resolve, reject) => {
-    // Set NO_BROWSER=true to force URL output
+    // Set NO_BROWSER=true to force URL output instead of opening browser
     const env = { ...process.env, NO_BROWSER: 'true' };
     
     // Use PowerShell on Windows, fallback to default shell
@@ -286,7 +322,7 @@ async function startQoderCliLogin() {
     const qodercliPath = findQoderCli();
     log.step(`Using qodercli from: ${qodercliPath}`);
     
-    // Spawn qodercli in interactive mode
+    // Spawn qodercli in interactive mode with NO_BROWSER=true
     const proc = spawn(qodercliPath, [], {
       stdio: ['pipe', 'pipe', 'pipe'],
       shell: shellCmd,
@@ -295,7 +331,8 @@ async function startQoderCliLogin() {
 
     let output = '';
     let loginUrl = null;
-    let loginPrompted = false;
+    let initialMenuHandledled = false;
+    let loginMethodSelected = false;
 
     // Capture stdout
     proc.stdout.on('data', (data) => {
@@ -303,15 +340,32 @@ async function startQoderCliLogin() {
       output += text;
       log.step(`qodercli: ${text.trim()}`);
 
-      // Send /login command when we see the interactive prompt
-      if (!loginPrompted && (text.includes('>') || text.includes('qoder') || text.includes('prompt'))) {
-        loginPrompted = true;
-        log.step('Sending /login command...');
-        proc.stdin.write('/login\n');
+      // Step 1: Handle initial menu "Sign in to continue" / "Exit"
+      if (!initialMenuHandledled && text.includes('Sign in to continue')) {
+        initialMenuHandledled = true;
+        log.step('Selecting "Sign in to continue" (option 1)...');
+        proc.stdin.write('\n'); // Press Enter to select option 1
       }
 
-      // Look for URL in output (after /login is sent)
-      if (loginPrompted) {
+      // Step 2: Auto-select "Browser" login method (option 1)
+      // With NO_BROWSER=true, this will print URL instead of opening browser
+      if (initialMenuHandledled && !loginMethodSelected) {
+        // Detect login method selection prompt
+        if (text.includes('Login with Qoder Platform') || 
+            text.includes('Browser') || 
+            text.includes('sign-in method') ||
+            text.includes('Select') ||
+            text.includes('1.') ||
+            text.includes('2.')) {
+          loginMethodSelected = true;
+          log.step('Auto-selecting Browser login method (option 1)...');
+          log.step('NO_BROWSER=true is set, URL will be printed instead of opening browser');
+          proc.stdin.write('1\n'); // Select option 1: Browser login
+        }
+      }
+
+      // Step 3: Look for URL in output (after login method selected)
+      if (loginMethodSelected) {
         const urlMatch = text.match(/https?:\/\/[^\s]+/);
         if (urlMatch && !loginUrl) {
           loginUrl = urlMatch[0];
@@ -327,7 +381,7 @@ async function startQoderCliLogin() {
       log.step(`qodercli (stderr): ${text.trim()}`);
 
       // Look for URL in stderr too
-      if (loginPrompted) {
+      if (loginMethodSelected) {
         const urlMatch = text.match(/https?:\/\/[^\s]+/);
         if (urlMatch && !loginUrl) {
           loginUrl = urlMatch[0];
@@ -360,7 +414,7 @@ async function startQoderCliLogin() {
         proc.kill();
         reject(new Error('Timeout waiting for login URL'));
       }
-    }, 15000);
+    }, 20000);
 
     // Clear timeout if we got URL
     const checkUrl = setInterval(() => {
