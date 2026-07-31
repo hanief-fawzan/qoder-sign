@@ -1,57 +1,134 @@
 # Qoder Sign — Auto Login/Logout Qoder CLI via Google SSO
 
-Setiap akun di `accounts.txt` akan:
-1. **Login** ke Qoder via Google SSO (Chrome Incognito)
-2. **Logout** dari Qoder CLI (`qodercli logout`)
-3. Lanjut akun berikutnya
+Automasi login/logout Qoder CLI menggunakan Google SSO dengan Chrome Incognito. Setiap akun akan login, lalu logout otomatis, dengan jeda untuk verifikasi HP.
 
-Ada **jeda 2 menit** untuk kamu klik OK di HP (Google verification prompt).
+## ✨ Fitur
 
-## Anti-Banned Features
+- 🔄 **Auto Login/Logout** — Setiap akun login ke Qoder, lalu logout via `qodercli logout`
+- 🕵️ **Stealth Mode** — Anti-detection dengan puppeteer-extra-plugin-stealth
+- 🌐 **System Chrome** — Menggunakan Chrome yang sudah terinstall (bukan Puppeteer Chrome)
+- 🎭 **Incognito Mode** — Setiap akun pakai Chrome Incognito (clean session)
+- 🤖 **Human Behavior** — Mouse movements, random delays, typing simulation
+- 📱 **HP Verification Support** — Jeda 2 menit untuk verifikasi di HP
+- 📊 **Account Management** — Auto-move akun sukses ke `done_accounts.txt`
 
-- ✅ **Stealth Plugin** — Hide automation fingerprints
-- ✅ **Random Delays** — Random timing between actions (anti-pattern detection)
-- ✅ **Human Behavior** — Mouse movements, scrolling, typing delays
-- ✅ **User Agent Rotation** — Random Chrome versions
-- ✅ **Random Viewport** — Different window sizes per account
-- ✅ **Incognito Mode** — Clean session per account (no cookies/cache)
-- ✅ **System Chrome** — Use your actual Chrome (not Puppeteer's)
-
-## Persyaratan
+## 📋 Persyaratan
 
 - **Windows 10/11**
-- **Node.js 18+** — https://nodejs.org/
-- **Google Chrome** — harus sudah terinstall
-- **qodercli** — harus sudah terinstall (`npm install -g @anthropic-ai/qodercli`)
+- **Node.js 18+** — [Download](https://nodejs.org/)
+- **Google Chrome** — Harus terinstall di sistem
+- **qodercli** — Akan diinstall otomatis atau manual: `npm install -g @anthropic-ai/qodercli`
 
-## Cara Pakai
+## 🚀 Instalasi
 
-### 1. Setup (pertama kali)
+### 1. Clone Repository
+
+```bash
+git clone https://github.com/hanief-fawzan/qoder-sign.git
+cd qoder-sign
 ```
+
+### 2. Install Dependencies
+
+**Windows (Recommended):**
+```bash
 setup.bat
 ```
 
-### 2. Isi `accounts.txt`
+**Manual:**
+```bash
+npm install
+```
+
+### 3. Setup Configuration Files
+
+**Copy accounts.txt.example:**
+```bash
+copy accounts.txt.example accounts.txt
+```
+
+**Copy .env.example (optional):**
+```bash
+copy .env.example .env
+```
+
+### 4. Verify Installation
+
+Pastikan semua requirements terpenuhi:
+- ✅ Node.js terinstall (`node --version`)
+- ✅ Google Chrome terinstall
+- ✅ qodercli terinstall (`qodercli --version`)
+
+## 📝 Cara Pakai
+
+### 1. Edit File `accounts.txt`
+
+Buka `accounts.txt` dan isi dengan format:
+
 ```
 email1@gmail.com:password1
 email2@gmail.com:password2
 email3@gmail.com:password3
 ```
 
-### 3. Jalankan
+**Format:** `email:password` (satu akun per baris)
+
+### 2. Edit File `.env` (Optional)
+
+Jika ingin mengubah konfigurasi, edit file `.env`:
+
+```env
+# Browser Settings
+HEADLESS=false
+SLOW_MO=50
+
+# Timeouts (in milliseconds)
+DELAY_BETWEEN=8000
+HP_PROMPT_WAIT=120000
+NAV_TIMEOUT=30000
+GOOGLE_TIMEOUT=120000
 ```
+
+**Penjelasan:**
+- `HEADLESS` - `true` untuk mode headless, `false` untuk visible
+- `SLOW_MO` - Delay antar aksi (ms)
+- `DELAY_BETWEEN` - Delay antar akun (ms)
+- `HP_PROMPT_WAIT` - Timeout verifikasi HP (ms)
+- `NAV_TIMEOUT` - Timeout navigasi (ms)
+- `GOOGLE_TIMEOUT` - Timeout Google login (ms)
+
+### 3. Jalankan Program
+
+**Windows:**
+```bash
 login.bat
 ```
 
-Browser Chrome akan terbuka dalam **incognito mode**. Setiap akun:
-- Auto-fill email + password Google
-- **JEDA 2 MENIT** — kalau muncul verifikasi di HP, klik OK di HP kamu
-- Login ke Qoder → Logout dari Qoder CLI → lanjut akun berikutnya
+**Manual:**
+```bash
+node index.js
+```
 
-### 4. Akun yang sukses
-Otomatis pindah dari `accounts.txt` ke `done_accounts.txt`.
+### 4. Proses Otomatis
 
-## Flow Detail
+Program akan:
+1. Buka Chrome Incognito
+2. Navigate ke Qoder login page
+3. Klik "Sign in with Google"
+4. Auto-fill email dan password
+5. **JEDA 2 MENIT** — Kalau muncul verifikasi di HP, klik OK di HP kamu
+6. Login ke Qoder berhasil
+7. Logout dari Qoder CLI (`qodercli logout`)
+8. Pindah akun ke `done_accounts.txt`
+9. Lanjut ke akun berikutnya
+
+### 5. Cek Hasil
+
+- **Akun sukses:** Ada di `done_accounts.txt`
+- **Akun gagal:** Tetap di `accounts.txt` (bisa retry)
+- **Screenshot error:** Ada di folder `results/`
+
+## 🔄 Workflow
 
 ```
 Account 1:
@@ -74,17 +151,66 @@ Account 3:
   └─ ... same flow
 ```
 
-## File
+## 🛡️ Anti-Banned Features
 
-| File | Fungsi |
-|------|--------|
-| `accounts.txt` | Isi akun di sini (email:password) |
-| `done_accounts.txt` | Akun yang sudah berhasil (auto) |
-| `results/` | Screenshot + JSON per akun |
-| `login.bat` | Jalankan program |
-| `logout.bat` | Logout manual dari qodercli |
-| `setup.bat` | Install dependencies |
+- ✅ **Stealth Plugin** — Hide automation fingerprints
+- ✅ **Random Delays** — Random timing between actions (anti-pattern detection)
+- ✅ **Human Behavior** — Mouse movements, scrolling, typing delays
+- ✅ **User Agent Rotation** — Random Chrome versions
+- ✅ **Random Viewport** — Different window sizes per account
+- ✅ **Incognito Mode** — Clean session per account (no cookies/cache)
+- ✅ **System Chrome** — Use your actual Chrome (not Puppeteer's)
 
-## Security Note
+## 📁 File Structure
 
-⚠️ File `accounts.txt` berisi password Google dalam plain text. Jangan share ke siapapun!
+```
+qoder-sign/
+├── index.js              # Main script
+├── package.json          # Dependencies
+├── accounts.txt          # Input: akun yang akan diproses (copy dari .example)
+├── accounts.txt.example  # Template accounts
+├── .env                  # Configuration (copy dari .example)
+├── .env.example          # Template configuration
+├── done_accounts.txt     # Output: akun yang sudah berhasil
+├── results/              # Screenshot & JSON per akun
+├── setup.bat             # Setup script (Windows)
+├── login.bat             # Run script (Windows)
+├── logout.bat            # Manual logout (Windows)
+└── README.md             # This file
+```
+
+## 🔧 Troubleshooting
+
+### Chrome tidak terdeteksi
+- Pastikan Google Chrome terinstall di path default
+- Atau edit `findSystemChrome()` di `index.js`
+
+### qodercli tidak terinstall
+```bash
+npm install -g @anthropic-ai/qodercli
+```
+
+### Login gagal
+- Cek email dan password di `accounts.txt`
+- Cek screenshot di folder `results/`
+- Pastikan tidak ada 2FA yang blocking
+
+### Verifikasi HP tidak muncul
+- Program sudah kasih jeda 2 menit
+- Kalau perlu lebih, edit `HP_PROMPT_WAIT` di `.env`
+
+## 🔐 Security Note
+
+⚠️ **PENTING:** File `accounts.txt` berisi password Google dalam plain text.
+- Jangan commit file ini ke git
+- Jangan share ke siapapun
+- Hapus setelah semua akun berhasil
+- Hanya jalankan di komputer pribadi
+
+## 📄 License
+
+MIT
+
+## 🤝 Contributing
+
+Pull requests welcome! Untuk major changes, please open issue dulu.
