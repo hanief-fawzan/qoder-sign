@@ -1,8 +1,13 @@
 # qoder-sign
 
+![AI Coded](https://img.shields.io/badge/AI_Coded-7C3AED?style=flat-square&logo=robot-framework&logoColor=white)
+![Use With Caution](https://img.shields.io/badge/⚠_Use_With_Precaution-F59E0B?style=flat-square&labelColor=black)
+
 Automated login/logout for Qoder CLI via Google SSO. Drives the OAuth flow through Puppeteer (stealth) or CamoFox, one account at a time.
 
-## What It Does
+---
+
+## 🔄 What It Does
 
     accounts.txt -> qoder-sign -> done_accounts.txt
 
@@ -17,14 +22,14 @@ For each account:
 8. Send `/logout` to the same qodercli session
 9. Move account to `done_accounts.txt`, repeat
 
-## Requirements
+## 📋 Requirements
 
 - **Node.js 18+** — [Download](https://nodejs.org/)
 - **Google Chrome** — must be installed on the system (for `local` mode)
 - **Qoder CLI** — separate application, install from [qoder.com/cli](https://qoder.com/cli)
 - **CamoFox** (optional) — Docker container for headless remote browser, see [camofox-browser](https://github.com/jo-inc/camofox-browser)
 
-## Install
+## 🚀 Install
 
 ### 1. Clone
 
@@ -106,7 +111,7 @@ user2@gmail.com:password2
 
 Lines starting with `#` are ignored.
 
-## Usage
+## ▶️ Usage
 
 ```bash
 # Windows
@@ -116,21 +121,21 @@ run.bat
 node index.js
 ```
 
-## Results
+## 📊 Results
 
 - **Success:** account moved to `done_accounts.txt`
 - **Failure:** stays in `accounts.txt`, retried up to `MAX_RETRIES` times
 - **Per-account logs:** `results/*.json`
 
-## Anti-Ban Measures
+## 🛡️ Anti-Ban Measures
 
-- Puppeteer stealth plugin (hides automation fingerprints)
-- Random delays, mouse movements, scrolling
-- User agent rotation + random viewport sizes
-- Incognito mode per account (clean session, no cookies)
-- System Chrome (not Puppeteer's bundled Chromium)
+- ✅ Puppeteer stealth plugin (hides automation fingerprints)
+- ✅ Random delays, mouse movements, scrolling
+- ✅ User agent rotation + random viewport sizes
+- ✅ Incognito mode per account (clean session, no cookies)
+- ✅ System Chrome (not Puppeteer's bundled Chromium)
 
-## File Structure
+## 📁 File Structure
 
 ```
 qoder-sign/
@@ -145,7 +150,7 @@ qoder-sign/
 └── README.md
 ```
 
-## Troubleshooting
+## 🔧 Troubleshooting
 
 | Problem | Fix |
 |---------|-----|
@@ -155,14 +160,14 @@ qoder-sign/
 | Login fails | Check credentials in `accounts.txt`, check `results/*.json` for details |
 | HP verification timeout | Increase `QODERCLI_TIMEOUT` in `.env` |
 
-## Security
+## 🔐 Security
 
 `accounts.txt` contains plaintext passwords. Never commit it, never share it. The `.gitignore` already excludes it.
 
-## Contributing
+## 🤝 Contributing
 
 This project does not accept pull requests or issues. Fork it if you need changes.
 
-## License
+## 📄 License
 
 MIT
