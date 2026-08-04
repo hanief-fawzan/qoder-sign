@@ -1,16 +1,16 @@
 # qoder-sign
 
-Automated login/logout for Qoder CLI via Google SSO. Spawns `qodercli` interactive sessions with `NO_BROWSER=true`, captures the sign-in URL, drives Google OAuth through Puppeteer (stealth), then logs out — one account at a time.
+Automated login/logout for Qoder CLI via Google SSO. Drives the OAuth flow through Puppeteer (stealth) or CamoFox, one account at a time.
 
 ## What It Does
 
     accounts.txt -> qoder-sign -> done_accounts.txt
 
 For each account:
-1. Spawn `qodercli` interactive session (`NO_BROWSER=true`)
-2. Auto-select "Sign in" -> "Login with Qoder Platform (Browser)"
+1. Spawn `qodercli` interactive session (`NO_BROWSER=true`, set automatically)
+2. Auto-select "Sign in" → "Login with Qoder Platform (Browser)"
 3. Capture login URL from qodercli output
-4. Open Chrome Incognito to that URL
+4. Open browser to that URL (local Chrome Incognito **or** CamoFox session)
 5. Click "Sign in with Google", auto-fill email + password
 6. Wait for HP/2FA verification if needed (configurable)
 7. Token saved by qodercli automatically
@@ -20,8 +20,9 @@ For each account:
 ## Requirements
 
 - **Node.js 18+** — [Download](https://nodejs.org/)
-- **Google Chrome** — must be installed on the system
-- **Qoder CLI** — separate application, install from [https://qoder.com/cli](https://qoder.com/cli)
+- **Google Chrome** — must be installed on the system (for `local` mode)
+- **Qoder CLI** — separate application, install from [qoder.com/cli](https://qoder.com/cli)
+- **CamoFox** (optional) — Docker container for headless remote browser, see [camofox-browser](https://github.com/jo-inc/camofox-browser)
 
 ## Install
 
@@ -78,17 +79,21 @@ Edit `.env` — all settings live here. Key options:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `HEADLESS` | `false` | Run Chrome headless (no window) |
-| `SLOW_MO` | `50` | Delay between actions (ms) |
-| `CHROME_PATH` | auto-detect | Override Chrome path |
+| `BROWSER_MODE` | `local` | `local` (Puppeteer + Chrome) or `camofox` (remote Docker browser) |
+| `HEADLESS` | `false` | Run Chrome headless (local mode only) |
+| `SLOW_MO` | `50` | Delay between actions in ms (local mode) |
+| `CHROME_PATH` | auto-detect | Override Chrome path (local mode) |
+| `CAMOFOX_HOST` | `127.0.0.1` | CamoFox container address |
+| `CAMOFOX_PORT` | `9377` | CamoFox container port |
+| `CAMOFOX_API_KEY` | — | CamoFox API key (required for camofox mode) |
 | `CONCURRENT` | `1` | Parallel accounts |
-| `DELAY_BETWEEN` | `8000` | Delay between accounts (ms) |
+| `DELAY_BETWEEN` | `8000` | Delay between accounts in ms |
 | `TWO_FA_WAIT` | `0` | Seconds to wait for manual 2FA (0 = auto-skip) |
 | `TOTP_CODE` | empty | Auto-fill TOTP code (skips manual 2FA) |
 | `TYPING_SPEED` | `normal` | Preset: `fast`, `normal`, `slow` |
 | `FIRST_MESSAGE` | `hi` | Message sent after login to activate trial |
 | `MAX_RETRIES` | `3` | Retry count for failed accounts |
-| `RETRY_DELAY` | `15000` | Delay before retry (ms) |
+| `RETRY_DELAY` | `15000` | Delay before retry in ms |
 
 ### 5. Add Accounts
 
@@ -133,10 +138,11 @@ qoder-sign/
 ├── package.json          # Dependencies
 ├── .env.example          # Config template
 ├── accounts.txt.example  # Account list template
-├── results/              # JSON results per account
+├── results/              # JSON results per account (gitignored)
 ├── setup.bat             # Windows setup
 ├── run.bat               # Windows run
-└── logout.bat            # Windows logout
+├── logout.bat            # Windows logout
+└── README.md
 ```
 
 ## Troubleshooting
@@ -147,11 +153,15 @@ qoder-sign/
 | Chrome not detected | Set `CHROME_PATH` in `.env` |
 | qodercli not found | Install from [qoder.com/cli](https://qoder.com/cli), ensure it's in PATH |
 | Login fails | Check credentials in `accounts.txt`, check `results/*.json` for details |
-| HP verification timeout | Increase `HP_PROMPT_WAIT` / `QODERCLI_TIMEOUT` in `.env` |
+| HP verification timeout | Increase `QODERCLI_TIMEOUT` in `.env` |
 
 ## Security
 
 `accounts.txt` contains plaintext passwords. Never commit it, never share it. The `.gitignore` already excludes it.
+
+## Contributing
+
+This project does not accept pull requests or issues. Fork it if you need changes.
 
 ## License
 
