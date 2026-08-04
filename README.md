@@ -1,9 +1,16 @@
+<div align="center">
+
 # qoder-sign
 
-![AI Coded](https://img.shields.io/badge/AI_Coded-7C3AED?style=flat-square&logo=robot-framework&logoColor=white)
-![Use With Caution](https://img.shields.io/badge/⚠_Use_With_Precaution-F59E0B?style=flat-square&labelColor=black)
+![AI Coded](https://img.shields.io/badge/AI_Coded-7C3AED?style=for-the-badge&logo=robot-framework&logoColor=white)
+![Use With Caution](https://img.shields.io/badge/⚠_Use_With_Precaution-F59E0B?style=for-the-badge&labelColor=black)
 
-Automated login/logout for Qoder CLI via Google SSO. Drives the OAuth flow through Puppeteer (stealth) or CamoFox, one account at a time.
+**Automated login/logout for Qoder CLI via Google SSO.**
+Drives the OAuth flow through Puppeteer (stealth) or CamoFox, one account at a time.
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=100&section=header&text=&fontSize=0" width="100%" />
+
+</div>
 
 ---
 
