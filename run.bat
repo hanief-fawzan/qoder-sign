@@ -1,24 +1,25 @@
 @echo off
 REM ============================================================
-REM  Qoder Sign - Launcher
-REM  Jalankan program auto login/logout Qoder CLI
+REM  Qoder Sign - Run
+REM  All configuration is in .env
 REM ============================================================
-
-echo ============================================================
-echo  Qoder Sign - Google SSO Auto Login
-echo ============================================================
-echo.
 
 cd /d "%~dp0"
 
-REM Jalankan script
-python qoder_auto_auth.py %*
-if errorlevel 1 (
-    echo.
-    echo [!] Ada error. Pastikan sudah jalankan setup.bat dulu.
+REM Add qodercli to PATH if it exists in common locations
+if exist "%USERPROFILE%\.qoder\bin\qodercli\qodercli.exe" (
+    set "PATH=%USERPROFILE%\.qoder\bin\qodercli;%PATH%"
+) else if exist "%LOCALAPPDATA%\qoder\bin\qodercli\qodercli.exe" (
+    set "PATH=%LOCALAPPDATA%\qoder\bin\qodercli;%PATH%"
+)
+
+REM Check if .env exists
+if not exist .env (
+    echo [!] ERROR: .env file not found!
+    echo     Please copy .env.example to .env and configure it.
     pause
     exit /b 1
 )
 
-echo.
-pause
+node index.js
+if errorlevel 1 pause

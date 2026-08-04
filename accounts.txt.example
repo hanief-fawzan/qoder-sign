@@ -1,0 +1,9 @@
+# Qoder Sign - Accounts List
+# Format: email:password
+# Satu akun per baris
+# Baris yang dimulai dengan # akan diabaikan
+
+# Contoh:
+# user1@gmail.com:password123
+# user2@gmail.com:password456
+# user3@gmail.com:password789

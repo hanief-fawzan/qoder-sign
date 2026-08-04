@@ -10,6 +10,7 @@
     "headless": "node index.js login --headless"
   },
   "dependencies": {
+    "dotenv": "^17.4.2",
     "puppeteer": "^24.0.0",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2"

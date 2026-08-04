@@ -3,8 +3,10 @@ node_modules/
 
 # Accounts (sensitive)
 accounts.txt
+done_accounts.txt
 
-# Results
+# Output
+output/
 results/
 
 # OS

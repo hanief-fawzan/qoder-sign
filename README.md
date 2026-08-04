@@ -1,90 +1,158 @@
-# Qoder Sign — Auto Login/Logout Qoder CLI via Google SSO
+# qoder-sign
 
-Setiap akun di `accounts.txt` akan:
-1. **Login** ke Qoder via Google SSO (Chrome Incognito)
-2. **Logout** dari Qoder CLI (`qodercli logout`)
-3. Lanjut akun berikutnya
+Automated login/logout for Qoder CLI via Google SSO. Spawns `qodercli` interactive sessions with `NO_BROWSER=true`, captures the sign-in URL, drives Google OAuth through Puppeteer (stealth), then logs out — one account at a time.
 
-Ada **jeda 2 menit** untuk kamu klik OK di HP (Google verification prompt).
+## What It Does
 
-## Anti-Banned Features
+    accounts.txt -> qoder-sign -> done_accounts.txt
 
-- ✅ **Stealth Plugin** — Hide automation fingerprints
-- ✅ **Random Delays** — Random timing between actions (anti-pattern detection)
-- ✅ **Human Behavior** — Mouse movements, scrolling, typing delays
-- ✅ **User Agent Rotation** — Random Chrome versions
-- ✅ **Random Viewport** — Different window sizes per account
-- ✅ **Incognito Mode** — Clean session per account (no cookies/cache)
-- ✅ **System Chrome** — Use your actual Chrome (not Puppeteer's)
+For each account:
+1. Spawn `qodercli` interactive session (`NO_BROWSER=true`)
+2. Auto-select "Sign in" -> "Login with Qoder Platform (Browser)"
+3. Capture login URL from qodercli output
+4. Open Chrome Incognito to that URL
+5. Click "Sign in with Google", auto-fill email + password
+6. Wait for HP/2FA verification if needed (configurable)
+7. Token saved by qodercli automatically
+8. Send `/logout` to the same qodercli session
+9. Move account to `done_accounts.txt`, repeat
 
-## Persyaratan
+## Requirements
 
-- **Windows 10/11**
-- **Node.js 18+** — https://nodejs.org/
-- **Google Chrome** — harus sudah terinstall
-- **qodercli** — harus sudah terinstall (`npm install -g @anthropic-ai/qodercli`)
+- **Node.js 18+** — [Download](https://nodejs.org/)
+- **Google Chrome** — must be installed on the system
+- **Qoder CLI** — separate application, install from [https://qoder.com/cli](https://qoder.com/cli)
 
-## Cara Pakai
+## Install
 
-### 1. Setup (pertama kali)
-```
-setup.bat
-```
+### 1. Clone
 
-### 2. Isi `accounts.txt`
-```
-email1@gmail.com:password1
-email2@gmail.com:password2
-email3@gmail.com:password3
+```bash
+git clone https://github.com/hanief-fawzan/qoder-sign.git
+cd qoder-sign
 ```
 
-### 3. Jalankan
-```
-login.bat
-```
+Or [download ZIP](https://github.com/hanief-fawzan/qoder-sign/archive/refs/heads/main.zip) — repo is public, no GitHub login needed.
 
-Browser Chrome akan terbuka dalam **incognito mode**. Setiap akun:
-- Auto-fill email + password Google
-- **JEDA 2 MENIT** — kalau muncul verifikasi di HP, klik OK di HP kamu
-- Login ke Qoder → Logout dari Qoder CLI → lanjut akun berikutnya
+### 2. Install Qoder CLI
 
-### 4. Akun yang sukses
-Otomatis pindah dari `accounts.txt` ke `done_accounts.txt`.
+Qoder CLI is **not** an npm package. Install from the official source:
 
-## Flow Detail
-
-```
-Account 1:
-  ├─ Chrome Incognito (clean session)
-  ├─ Random User Agent + Viewport
-  ├─ Human-like typing + mouse movements
-  ├─ Login Google SSO
-  ├─ Wait for HP verification (2 min)
-  ├─ Login to Qoder
-  ├─ qodercli logout (terminal command)
-  └─ Close incognito window
-
-Account 2:
-  ├─ New Chrome Incognito (clean session)
-  ├─ Different User Agent + Viewport
-  ├─ Random delays (anti-pattern)
-  └─ ... same flow
-
-Account 3:
-  └─ ... same flow
+**Windows (PowerShell):**
+```powershell
+irm https://qoder.com/install.ps1 | iex
 ```
 
-## File
+**Windows (CMD):**
+```cmd
+curl -fsSL https://qoder.com/install.cmd -o install.cmd && install.cmd
+```
 
-| File | Fungsi |
-|------|--------|
-| `accounts.txt` | Isi akun di sini (email:password) |
-| `done_accounts.txt` | Akun yang sudah berhasil (auto) |
-| `results/` | Screenshot + JSON per akun |
-| `login.bat` | Jalankan program |
-| `logout.bat` | Logout manual dari qodercli |
-| `setup.bat` | Install dependencies |
+**macOS/Linux:**
+```bash
+curl -fsSL https://qoder.com/install | bash
+```
 
-## Security Note
+Verify: `qodercli --version`
 
-⚠️ File `accounts.txt` berisi password Google dalam plain text. Jangan share ke siapapun!
+### 3. Install Dependencies
+
+```bash
+# Windows — double-click setup.bat, or:
+npm install
+```
+
+### 4. Configure
+
+```bash
+# Windows
+copy .env.example .env
+copy accounts.txt.example accounts.txt
+
+# macOS/Linux
+cp .env.example .env
+cp accounts.txt.example accounts.txt
+```
+
+Edit `.env` — all settings live here. Key options:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HEADLESS` | `false` | Run Chrome headless (no window) |
+| `SLOW_MO` | `50` | Delay between actions (ms) |
+| `CHROME_PATH` | auto-detect | Override Chrome path |
+| `CONCURRENT` | `1` | Parallel accounts |
+| `DELAY_BETWEEN` | `8000` | Delay between accounts (ms) |
+| `TWO_FA_WAIT` | `0` | Seconds to wait for manual 2FA (0 = auto-skip) |
+| `TOTP_CODE` | empty | Auto-fill TOTP code (skips manual 2FA) |
+| `TYPING_SPEED` | `normal` | Preset: `fast`, `normal`, `slow` |
+| `FIRST_MESSAGE` | `hi` | Message sent after login to activate trial |
+| `MAX_RETRIES` | `3` | Retry count for failed accounts |
+| `RETRY_DELAY` | `15000` | Delay before retry (ms) |
+
+### 5. Add Accounts
+
+Edit `accounts.txt`, one per line:
+
+```
+user1@gmail.com:password1
+user2@gmail.com:password2
+```
+
+Lines starting with `#` are ignored.
+
+## Usage
+
+```bash
+# Windows
+run.bat
+
+# Manual
+node index.js
+```
+
+## Results
+
+- **Success:** account moved to `done_accounts.txt`
+- **Failure:** stays in `accounts.txt`, retried up to `MAX_RETRIES` times
+- **Per-account logs:** `results/*.json`
+
+## Anti-Ban Measures
+
+- Puppeteer stealth plugin (hides automation fingerprints)
+- Random delays, mouse movements, scrolling
+- User agent rotation + random viewport sizes
+- Incognito mode per account (clean session, no cookies)
+- System Chrome (not Puppeteer's bundled Chromium)
+
+## File Structure
+
+```
+qoder-sign/
+├── index.js              # Main script
+├── package.json          # Dependencies
+├── .env.example          # Config template
+├── accounts.txt.example  # Account list template
+├── results/              # JSON results per account
+├── setup.bat             # Windows setup
+├── run.bat               # Windows run
+└── logout.bat            # Windows logout
+```
+
+## Troubleshooting
+
+| Problem | Fix |
+|---------|-----|
+| `.env` not found | Copy `.env.example` to `.env` |
+| Chrome not detected | Set `CHROME_PATH` in `.env` |
+| qodercli not found | Install from [qoder.com/cli](https://qoder.com/cli), ensure it's in PATH |
+| Login fails | Check credentials in `accounts.txt`, check `results/*.json` for details |
+| HP verification timeout | Increase `HP_PROMPT_WAIT` / `QODERCLI_TIMEOUT` in `.env` |
+
+## Security
+
+`accounts.txt` contains plaintext passwords. Never commit it, never share it. The `.gitignore` already excludes it.
+
+## License
+
+MIT

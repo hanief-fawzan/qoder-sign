@@ -1,59 +1,92 @@
 // ============================================================
 //  Qoder Sign — Auto Login/Logout Qoder CLI via Google SSO
-//  Pendekatan A: Jalankan qodercli login → capture URL → buka browser
-//  Anti-banned: Stealth + Random delays + Human behavior
+//  Supports: Local Puppeteer + CamoFox REST API
+//  Configuration-driven via .env (mandatory)
 // ============================================================
 
-const puppeteer = require('puppeteer-extra');
-const StealthPlugin = require('puppeteer-extra-plugin-stealth');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
-const { spawn, execSync } = require('child_process');
+const { spawn } = require('child_process');
+const http = require('http');
 
-// ─── STEALTH ────────────────────────────────────────────────────────
-puppeteer.use(StealthPlugin());
+// ─── ENV (MANDATORY) ────────────────────────────────────────
+const envPath = path.join(__dirname, '.env');
+if (!fs.existsSync(envPath)) {
+  console.error('❌ ERROR: .env file not found!');
+  console.error('   Please copy .env.example to .env and configure it.');
+  process.exit(1);
+}
+require('dotenv').config({ path: envPath });
 
-// ─── CONFIG ─────────────────────────────────────────────────────────
+// ─── TYPING SPEED PRESETS ───────────────────────────────────
+const SPEED_PRESETS = {
+  fast:   { type: [15, 40],   delay: [300, 800],   pause: [500, 1200] },
+  normal: { type: [30, 80],   delay: [800, 2000],  pause: [1500, 3000] },
+  slow:   { type: [50, 150],  delay: [1500, 4000], pause: [3000, 6000] },
+};
+const TYPING_SPEED = process.env.TYPING_SPEED || 'normal';
+const speed = SPEED_PRESETS[TYPING_SPEED] || SPEED_PRESETS.normal;
+
+// ─── CONFIG ─────────────────────────────────────────────────
 const CONFIG = {
   // Files
   ACCOUNTS_FILE:    path.join(__dirname, 'accounts.txt'),
   DONE_FILE:        path.join(__dirname, 'done_accounts.txt'),
   RESULTS_DIR:      path.join(__dirname, 'results'),
 
-  // Browser - Anti-banned settings
-  HEADLESS:         false,    // false = visible (WAJIB untuk handle captcha/HP prompt)
-  SLOW_MO:          50,       // ms delay antar aksi (lebih natural)
-  DELAY_BETWEEN:    8000,     // ms delay antar akun (8 detik)
-  
+  // Browser mode: local | camofox
+  BROWSER_MODE:     (process.env.BROWSER_MODE || 'local').toLowerCase(),
+
+  // Local Puppeteer
+  HEADLESS:         process.env.HEADLESS !== 'false',
+  SLOW_MO:          parseInt(process.env.SLOW_MO) || 50,
+  CHROME_PATH:      process.env.CHROME_PATH || null,
+
+  // CamoFox REST API
+  CAMOFOX_HOST:     process.env.CAMOFOX_HOST || '127.0.0.1',
+  CAMOFOX_PORT:     parseInt(process.env.CAMOFOX_PORT) || 9377,
+  CAMOFOX_API_KEY:  process.env.CAMOFOX_API_KEY || '',
+  CAMOFOX_USER_ID:  process.env.CAMOFOX_USER_ID || 'qoder-agent',
+  CAMOFOX_HEADLESS: process.env.CAMOFOX_HEADLESS !== 'false',
+
+  // Concurrency
+  CONCURRENT:       parseInt(process.env.CONCURRENT) || 1,
+  DELAY_BETWEEN:    parseInt(process.env.DELAY_BETWEEN) || 8000,
+
   // Timeouts
-  GOOGLE_TIMEOUT:   120000,   // ms max tunggu Google login flow (2 menit)
-  HP_PROMPT_WAIT:   120000,   // ms max tunggu user klik OK di HP (2 menit)
-  NAV_TIMEOUT:      30000,    // ms max tunggu navigasi
-  QODERCLI_TIMEOUT: 180000,   // ms max tunggu qodercli login selesai (3 menit)
-  
-  // Anti-banned: Randomization
-  RANDOM_DELAY_MIN: 1000,     // ms min random delay
-  RANDOM_DELAY_MAX: 3000,     // ms max random delay
-  TYPING_DELAY_MIN: 30,       // ms min typing delay
-  TYPING_DELAY_MAX: 80,       // ms max typing delay
+  GOOGLE_TIMEOUT:   parseInt(process.env.GOOGLE_TIMEOUT) || 120000,
+  NAV_TIMEOUT:      parseInt(process.env.NAV_TIMEOUT) || 30000,
+  QODERCLI_TIMEOUT: parseInt(process.env.QODERCLI_TIMEOUT) || 180000,
+  QODERCLI_CALLBACK_TIMEOUT: parseInt(process.env.QODERCLI_CALLBACK_TIMEOUT) || 120000,
+  FIRST_MESSAGE_TIMEOUT:     parseInt(process.env.FIRST_MESSAGE_TIMEOUT) || 60000,
+
+  // 2FA / TOTP
+  TWO_FA_WAIT:      parseInt(process.env.TWO_FA_WAIT) || 0,
+  TOTP_CODE:        process.env.TOTP_CODE || '',
+
+  // Randomization
+  RANDOM_DELAY_MIN: parseInt(process.env.RANDOM_DELAY_MIN) || speed.delay[0],
+  RANDOM_DELAY_MAX: parseInt(process.env.RANDOM_DELAY_MAX) || speed.delay[1],
+  TYPING_DELAY_MIN: parseInt(process.env.TYPING_DELAY_MIN) || speed.type[0],
+  TYPING_DELAY_MAX: parseInt(process.env.TYPING_DELAY_MAX) || speed.type[1],
+  PAUSE_MIN:        parseInt(process.env.PAUSE_MIN) || speed.pause[0],
+  PAUSE_MAX:        parseInt(process.env.PAUSE_MAX) || speed.pause[1],
+
+  // Retry
+  MAX_RETRIES:      parseInt(process.env.MAX_RETRIES) || 0,
+  RETRY_DELAY:      parseInt(process.env.RETRY_DELAY) || 15000,
+
+  // First message
+  FIRST_MESSAGE:    process.env.FIRST_MESSAGE || 'hi',
 };
 
-// ─── USER AGENTS (Rotation) ─────────────────────────────────────────
-const USER_AGENTS = [
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/118.0.0.0 Safari/537.36',
-];
-
-// ─── COLORS ─────────────────────────────────────────────────────────
+// ─── COLORS / LOG ───────────────────────────────────────────
 const C = {
   reset: '\x1b[0m', bold: '\x1b[1m', dim: '\x1b[2m',
   green: '\x1b[32m', red: '\x1b[31m', yellow: '\x1b[33m',
   cyan: '\x1b[36m', magenta: '\x1b[35m', gray: '\x1b[90m',
 };
-
 const log = {
   info:   (m) => console.log(`${C.cyan}[INFO]${C.reset}  ${m}`),
   ok:     (m) => console.log(`${C.green}[ OK ]${C.reset}  ${m}`),
@@ -63,646 +96,787 @@ const log = {
   header: (m) => console.log(`\n${C.bold}${C.cyan}${'═'.repeat(55)}\n  ${m}\n${'═'.repeat(55)}${C.reset}`),
 };
 
-// ─── UTILITY FUNCTIONS ──────────────────────────────────────────────
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+// ─── UTILS ──────────────────────────────────────────────────
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+function randomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+function randomDelay(min = CONFIG.RANDOM_DELAY_MIN, max = CONFIG.RANDOM_DELAY_MAX) { return sleep(randomInt(min, max)); }
+function randomTypingDelay() { return randomInt(CONFIG.TYPING_DELAY_MIN, CONFIG.TYPING_DELAY_MAX); }
+function randomPause() { return sleep(randomInt(CONFIG.PAUSE_MIN, CONFIG.PAUSE_MAX)); }
 
-function randomDelay(min = CONFIG.RANDOM_DELAY_MIN, max = CONFIG.RANDOM_DELAY_MAX) {
-  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
-  return sleep(delay);
-}
-
-function randomTypingDelay() {
-  return Math.floor(Math.random() * (CONFIG.TYPING_DELAY_MAX - CONFIG.TYPING_DELAY_MIN + 1)) + CONFIG.TYPING_DELAY_MIN;
-}
-
-function randomUserAgent() {
-  return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
-}
-
-async function humanLikeScroll(page) {
-  const scrollAmount = Math.floor(Math.random() * 300) + 100;
-  await page.evaluate((amount) => {
-    window.scrollBy(0, amount);
-  }, scrollAmount);
-  await randomDelay(500, 1500);
-}
-
-async function humanLikeMouseMovement(page) {
-  const x = Math.floor(Math.random() * 800) + 100;
-  const y = Math.floor(Math.random() * 600) + 100;
-  await page.mouse.move(x, y);
-  await randomDelay(300, 800);
-}
-
-// ─── SYSTEM CHROME DETECTION ────────────────────────────────────────
-function findSystemChrome() {
-  const platform = os.platform();
-  const candidates = [];
-
-  if (platform === 'win32') {
-    const programFiles = [
-      process.env['PROGRAMFILES']     || 'C:\\Program Files',
-      process.env['PROGRAMFILES(X86)'] || 'C:\\Program Files (x86)',
-      process.env['LOCALAPPDATA']     || path.join(os.homedir(), 'AppData', 'Local'),
-    ];
-    candidates.push(
-      path.join(programFiles[0], 'Google', 'Chrome', 'Application', 'chrome.exe'),
-      path.join(programFiles[1], 'Google', 'Chrome', 'Application', 'chrome.exe'),
-      path.join(programFiles[2], 'Google', 'Chrome', 'Application', 'chrome.exe'),
-    );
-  } else if (platform === 'darwin') {
-    candidates.push(
-      '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-      path.join(os.homedir(), 'Applications', 'Google Chrome.app', 'Contents', 'MacOS', 'Google Chrome'),
-    );
-  } else {
-    candidates.push(
-      '/usr/bin/google-chrome',
-      '/usr/bin/google-chrome-stable',
-      '/usr/bin/chromium',
-      '/usr/bin/chromium-browser',
-      '/snap/bin/chromium',
-    );
-  }
-
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
-      log.ok(`System Chrome found: ${p}`);
-      return p;
-    }
-  }
-  return null;
-}
-
-// ─── ACCOUNTS FILE MANAGEMENT ───────────────────────────────────────
+// ─── FILE / ACCOUNTS ────────────────────────────────────────
 function loadAccounts() {
   if (!fs.existsSync(CONFIG.ACCOUNTS_FILE)) {
-    log.error(`accounts.txt tidak ditemukan: ${CONFIG.ACCOUNTS_FILE}`);
-    log.info('Buat file accounts.txt dengan format: email@gmail.com:password');
+    log.error(`accounts.txt not found: ${CONFIG.ACCOUNTS_FILE}`);
+    log.info('Format: email@gmail.com:password');
     process.exit(1);
   }
-
   const lines = fs.readFileSync(CONFIG.ACCOUNTS_FILE, 'utf8')
-    .split('\n')
-    .map(l => l.trim().replace(/\r$/, ''))
-    .filter(l => l && !l.startsWith('#'));
-
+    .split('\n').map(l => l.trim().replace(/\r$/, '')).filter(l => l && !l.startsWith('#'));
   const accounts = [];
   for (const line of lines) {
     const sep = line.indexOf(':');
-    if (sep === -1) {
-      log.warn(`Skip baris tidak valid (format email:password): ${line}`);
-      continue;
-    }
-    accounts.push({
-      raw:      line,
-      email:    line.slice(0, sep).trim(),
-      password: line.slice(sep + 1).trim(),
-    });
+    if (sep === -1) { log.warn(`Skip invalid line: ${line}`); continue; }
+    const account = { raw: line, email: line.slice(0, sep).trim(), password: line.slice(sep + 1).trim() };
+    if (isAlreadyDone(account)) { log.step(`Skip ${account.email} (already done)`); continue; }
+    accounts.push(account);
   }
   return accounts;
 }
-
+function isAlreadyDone(account) {
+  if (!fs.existsSync(CONFIG.DONE_FILE)) { fs.writeFileSync(CONFIG.DONE_FILE, '', 'utf8'); return false; }
+  const done = fs.readFileSync(CONFIG.DONE_FILE, 'utf8').split('\n').map(l => l.trim()).filter(Boolean);
+  return done.includes(account.raw);
+}
 function moveToDone(account) {
   fs.appendFileSync(CONFIG.DONE_FILE, account.raw + '\n', 'utf8');
-
-  const lines = fs.readFileSync(CONFIG.ACCOUNTS_FILE, 'utf8')
-    .split('\n')
-    .filter(l => l.trim() !== account.raw);
+  const lines = fs.readFileSync(CONFIG.ACCOUNTS_FILE, 'utf8').split('\n').filter(l => l.trim() !== account.raw);
   fs.writeFileSync(CONFIG.ACCOUNTS_FILE, lines.join('\n'), 'utf8');
-
-  log.ok(`Dipindahkan ke done_accounts.txt`);
+  log.ok('Moved to done_accounts.txt');
+}
+function saveResult(email, data) {
+  fs.mkdirSync(CONFIG.RESULTS_DIR, { recursive: true });
+  const f = path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}.json`);
+  fs.writeFileSync(f, JSON.stringify({ ...data, timestamp: new Date().toISOString() }, null, 2));
 }
 
-// ─── QODERCLI LOGIN (Spawn Process) ─────────────────────────────────
-async function startQoderCliLogin() {
-  log.info('Starting qodercli login process...');
-  
+// ─── QODERCLI PATH ──────────────────────────────────────────
+function findQoderCli() {
+  const locations = [
+    path.join(os.homedir(), '.qoder', 'bin', 'qodercli', 'qodercli.exe'),
+    path.join(os.homedir(), '.qoder', 'bin', 'qodercli', 'qodercli'),
+    path.join(os.homedir(), '.qoder', 'qodercli.exe'),
+    path.join(os.homedir(), '.qoder', 'qodercli'),
+    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'bin', 'qodercli', 'qodercli.exe'),
+    path.join(os.homedir(), 'AppData', 'Local', 'qoder', 'qodercli.exe'),
+  ];
+  for (const loc of locations) if (fs.existsSync(loc)) return loc;
+  const qoderDir = path.join(os.homedir(), '.qoder');
+  if (fs.existsSync(qoderDir)) {
+    const exe = os.platform() === 'win32' ? 'qodercli.exe' : 'qodercli';
+    const found = findFileRecursive(qoderDir, exe, 3);
+    if (found) return found;
+  }
+  return 'qodercli';
+}
+function findFileRecursive(dir, filename, maxDepth) {
+  if (maxDepth <= 0) return null;
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isFile() && entry.name === filename) return full;
+      if (entry.isDirectory()) {
+        const found = findFileRecursive(full, filename, maxDepth - 1);
+        if (found) return found;
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+// ─── QODERCLI LOGIN (keep alive until callback) ─────────────
+function startQoderCliLogin() {
+  log.info('Phase 1: Starting qodercli login...');
   return new Promise((resolve, reject) => {
-    const proc = spawn('qodercli', ['login'], {
+    const qodercliPath = findQoderCli();
+    log.step(`Spawning: ${qodercliPath} login`);
+
+    const proc = spawn(qodercliPath, ['login'], {
       stdio: ['pipe', 'pipe', 'pipe'],
-      shell: os.platform() === 'win32',
+      env: { ...process.env, NO_BROWSER: 'true' },
     });
 
     let output = '';
     let loginUrl = null;
+    let loginSuccess = false;
+    let resolved = false;
 
-    // Capture stdout
-    proc.stdout.on('data', (data) => {
-      const text = data.toString();
+    function onData(chunk) {
+      const text = chunk.toString();
       output += text;
-      log.step(`qodercli: ${text.trim()}`);
+      const lines = text.split('\n').filter(l => l.trim());
+      for (const line of lines) log.step(`qodercli: ${line.trim()}`);
 
-      // Look for URL in output
-      const urlMatch = text.match(/https?:\/\/[^\s]+/);
+      const urlMatch = text.match(/(https?:\/\/[^\s]+)/);
       if (urlMatch && !loginUrl) {
-        loginUrl = urlMatch[0];
+        loginUrl = urlMatch[1];
         log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+        if (!resolved) { resolved = true; resolve({ proc, url: loginUrl, output, loginSuccess, isAlive: () => !proc.killed && proc.exitCode === null }); }
       }
-    });
-
-    // Capture stderr
-    proc.stderr.on('data', (data) => {
-      const text = data.toString();
-      output += text;
-      log.step(`qodercli (stderr): ${text.trim()}`);
-
-      // Look for URL in stderr too
-      const urlMatch = text.match(/https?:\/\/[^\s]+/);
-      if (urlMatch && !loginUrl) {
-        loginUrl = urlMatch[0];
-        log.ok(`Login URL captured: ${loginUrl.slice(0, 80)}...`);
+      if (text.includes('Login successful')) {
+        loginSuccess = true;
+        log.ok('qodercli confirmed: Login successful!');
       }
-    });
+    }
 
-    // Process exit
+    proc.stdout.on('data', onData);
+    proc.stderr.on('data', onData);
+
+    proc.on('error', (err) => { if (!resolved) { resolved = true; reject(err); } });
     proc.on('close', (code) => {
-      if (code === 0) {
-        log.ok('qodercli login completed successfully');
-        resolve({ success: true, url: loginUrl, output });
-      } else {
-        log.error(`qodercli exited with code ${code}`);
-        resolve({ success: false, url: loginUrl, output, code });
-      }
+      log.step(`qodercli login process exited (code ${code})`);
+      if (!resolved) { resolved = true; reject(new Error(`qodercli exited ${code} without providing URL`)); }
     });
 
-    // Process error
-    proc.on('error', (err) => {
-      log.error(`Failed to start qodercli: ${err.message}`);
-      reject(err);
-    });
-
-    // Timeout: wait for URL or timeout
-    const timeout = setTimeout(() => {
-      if (!loginUrl) {
-        log.warn('Timeout waiting for login URL from qodercli');
-        proc.kill();
-        reject(new Error('Timeout waiting for login URL'));
-      }
-    }, 10000);
-
-    // Clear timeout if we got URL
-    const checkUrl = setInterval(() => {
-      if (loginUrl) {
-        clearTimeout(timeout);
-        clearInterval(checkUrl);
-        resolve({ success: true, url: loginUrl, output, process: proc });
-      }
-    }, 500);
+    setTimeout(() => {
+      if (!resolved) { resolved = true; reject(new Error('Timeout waiting for login URL')); }
+    }, CONFIG.QODERCLI_TIMEOUT);
   });
 }
 
-// ─── QODERCLI LOGOUT ────────────────────────────────────────────────
-function logoutFromQoderCLI() {
-  log.info('Logging out from Qoder CLI...');
-  
-  try {
-    execSync('qodercli logout', { 
-      stdio: 'pipe', 
-      timeout: 10000,
-      windowsHide: true 
-    });
-    log.ok('qodercli logout executed successfully');
-    return true;
-  } catch (err) {
-    if (err.stderr && err.stderr.toString().includes('not logged in')) {
-      log.step('qodercli was not logged in (already logged out)');
-      return true;
+function waitForQodercliLogin(loginInfo, timeoutMs = CONFIG.QODERCLI_CALLBACK_TIMEOUT) {
+  return new Promise((resolve) => {
+    const proc = loginInfo.proc;
+    if (loginInfo.loginSuccess || proc.exitCode !== null || proc.killed) {
+      return resolve(loginInfo.loginSuccess);
     }
-    log.warn(`qodercli logout failed: ${err.message}`);
-    return false;
+    let resolved = false;
+    const handler = (data) => {
+      if (data.toString().includes('Login successful')) loginInfo.loginSuccess = true;
+    };
+    proc.stdout?.on('data', handler);
+    proc.stderr?.on('data', handler);
+    proc.on('close', () => { if (!resolved) { resolved = true; resolve(!!loginInfo.loginSuccess); } });
+    setTimeout(() => { if (!resolved) { resolved = true; resolve(!!loginInfo.loginSuccess); } }, timeoutMs);
+  });
+}
+
+// ─── FIRST MESSAGE & LOGOUT ─────────────────────────────────
+function sendFirstMessage(message) {
+  log.info(`Phase 3: Sending first message "${message}"...`);
+  return new Promise((resolve) => {
+    const qodercliPath = findQoderCli();
+    const proc = spawn(qodercliPath, ['-p', message], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let stdout = '', stderr = '', gotResponse = false;
+
+    proc.stdout.on('data', (d) => { stdout += d; if (d.toString().trim()) gotResponse = true; });
+    proc.stderr.on('data', (d) => { stderr += d; });
+
+    proc.on('close', (code) => {
+      const err = stderr.toLowerCase();
+      if (err.includes('credit') || err.includes('limit') || err.includes('usage limit')) {
+        log.warn('Credit limit reached — trial may not be activated');
+        resolve({ success: false, creditLimit: true, response: stdout, error: stderr });
+      } else if (code === 0 && gotResponse) {
+        log.ok('First message response received');
+        resolve({ success: true, response: stdout });
+      } else {
+        resolve({ success: false, response: stdout, error: stderr || `exit_${code}` });
+      }
+    });
+    proc.on('error', (err) => resolve({ success: false, error: err.message }));
+    setTimeout(() => { proc.kill(); resolve({ success: false, response: stdout, error: 'timeout' }); }, CONFIG.FIRST_MESSAGE_TIMEOUT);
+  });
+}
+
+function logoutQoderCli() {
+  log.info('Phase 4: Logging out from Qoder...');
+  return new Promise((resolve) => {
+    const qodercliPath = findQoderCli();
+
+    // Try dedicated logout command first
+    const logoutProc = spawn(qodercliPath, ['logout'], { stdio: ['pipe', 'pipe', 'pipe'] });
+    let out = '', finished = false;
+    logoutProc.stdout.on('data', (d) => { out += d; });
+    logoutProc.stderr.on('data', (d) => { out += d; });
+    logoutProc.on('close', (code) => {
+      if (!finished) {
+        finished = true;
+        if (code === 0 || out.toLowerCase().includes('logout') || out.toLowerCase().includes('success')) {
+          log.ok('qodercli logout success');
+          return resolve(true);
+        }
+        // Fallback: interactive /logout
+        interactiveLogout(resolve);
+      }
+    });
+    setTimeout(() => { if (!finished) { finished = true; logoutProc.kill(); interactiveLogout(resolve); } }, 10000);
+  });
+}
+
+function interactiveLogout(resolve) {
+  log.step('Fallback: interactive /logout...');
+  const qodercliPath = findQoderCli();
+  const proc = spawn(qodercliPath, [], { stdio: ['pipe', 'pipe', 'pipe'] });
+  let sent = false, finished = false;
+  proc.stdout.on('data', (d) => {
+    const text = d.toString();
+    if (!sent && /[>\$]|Ask|Type|qoder/i.test(text)) {
+      sent = true;
+      proc.stdin.write('/logout\n');
+    }
+  });
+  proc.on('close', () => { if (!finished) { finished = true; resolve(true); } });
+  proc.on('error', () => { if (!finished) { finished = true; resolve(false); } });
+  setTimeout(() => { if (!finished) { finished = true; proc.kill(); resolve(false); } }, 15000);
+}
+
+// ═══════════════════════════════════════════════════════════
+//  BROWSER DRIVERS
+// ═══════════════════════════════════════════════════════════
+
+// ─── CamoFox Driver ─────────────────────────────────────────
+class CamoFoxDriver {
+  constructor() {
+    this.base = `${CONFIG.CAMOFOX_HOST}:${CONFIG.CAMOFOX_PORT}`;
+    this.key = CONFIG.CAMOFOX_API_KEY;
+    this.user = CONFIG.CAMOFOX_USER_ID;
+    this.tabId = null;
+  }
+
+  async api(method, path, body = null, raw = false) {
+    return new Promise((resolve, reject) => {
+      const opts = {
+        hostname: CONFIG.CAMOFOX_HOST,
+        port: CONFIG.CAMOFOX_PORT,
+        path,
+        method,
+        headers: { Authorization: `Bearer ${this.key}` },
+        timeout: 60000,
+      };
+      if (body) {
+        opts.headers['Content-Type'] = 'application/json';
+        body = JSON.stringify({ ...body, userId: this.user });
+      }
+      const req = http.request(opts, (res) => {
+        let data = '';
+        res.on('data', (c) => { data += c; });
+        res.on('end', () => {
+          if (raw) return resolve({ status: res.statusCode, data });
+          try { resolve({ status: res.statusCode, data: JSON.parse(data) }); }
+          catch { resolve({ status: res.statusCode, data }); }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => { req.destroy(); reject(new Error('CamoFox API timeout')); });
+      if (body) req.write(body);
+      req.end();
+    });
+  }
+
+  async start() {
+    const { data } = await this.api('GET', '/');
+    if (!data.browserRunning) {
+      await this.api('POST', '/start');
+      await sleep(5000);
+    }
+  }
+
+  async newTab(url = null) {
+    const body = { sessionKey: `qoder-${Date.now()}`, userId: this.user };
+    if (url) body.url = url;
+    const { data } = await this.api('POST', '/tabs', body);
+    this.tabId = data.tabId;
+    if (url) await sleep(4000);
+    return this.tabId;
+  }
+
+  async navigate(url) {
+    await this.api('POST', `/tabs/${this.tabId}/navigate`, { url });
+    await sleep(4000);
+  }
+
+  async snapshot() {
+    const { data } = await this.api('GET', `/tabs/${this.tabId}/snapshot?userId=${encodeURIComponent(this.user)}`);
+    return data;
+  }
+
+  async click(ref) {
+    await this.api('POST', `/tabs/${this.tabId}/click`, { ref });
+    await sleep(1500);
+  }
+
+  async type(ref, text) {
+    await this.api('POST', `/tabs/${this.tabId}/type`, { ref, text });
+    await sleep(500);
+  }
+
+  async evaluate(expression) {
+    const { data } = await this.api('POST', `/tabs/${this.tabId}/evaluate`, { expression });
+    return data?.result;
+  }
+
+  async url() {
+    const snap = await this.snapshot();
+    return snap?.url || '';
+  }
+
+  async close() {
+    if (this.tabId) await this.api('DELETE', `/tabs/${this.tabId}`, {}).catch(() => {});
   }
 }
 
-// ─── GOOGLE SSO HANDLER ─────────────────────────────────────────────
-async function handleGoogleLogin(page, email, password) {
-  log.step('Waiting for Google login page...');
+// ─── Local Puppeteer Driver ─────────────────────────────────
+class LocalPuppeteerDriver {
+  async init() {
+    const puppeteer = require('puppeteer-extra');
+    const StealthPlugin = require('puppeteer-extra-plugin-stealth');
+    puppeteer.use(StealthPlugin());
 
-  try {
-    await page.waitForNavigation({ waitUntil: 'domcontentloaded', timeout: CONFIG.NAV_TIMEOUT });
-  } catch (_) {}
+    const chromePath = this.findChrome();
+    if (!chromePath) throw new Error('Google Chrome not found. Set CHROME_PATH in .env');
 
-  await randomDelay(1500, 2500);
-  const url = page.url();
-  log.step(`Current URL: ${url.slice(0, 80)}`);
-
-  await humanLikeMouseMovement(page);
-
-  // ── EMAIL STEP ──────────────────────────────────────────────────
-  const emailInput = await page.waitForSelector(
-    'input#identifierId, input[type="email"]',
-    { visible: true, timeout: 15000 }
-  ).catch(() => null);
-
-  if (!emailInput) {
-    log.warn('Email input not found — might be captcha or already logged in');
-    log.warn(`Waiting ${CONFIG.HP_PROMPT_WAIT / 1000}s for manual resolution...`);
-    await page.waitForSelector('input#identifierId', { visible: true, timeout: CONFIG.HP_PROMPT_WAIT }).catch(() => null);
-  }
-
-  if (await page.$('input#identifierId')) {
-    log.step(`Filling email: ${email}`);
-    
-    await page.click('input#identifierId');
-    await randomDelay(300, 600);
-    await page.type('input#identifierId', email, { delay: randomTypingDelay() });
-    await randomDelay(500, 1000);
-
-    await humanLikeMouseMovement(page);
-    
-    await page.click('#identifierNext button').catch(() => {
-      page.keyboard.press('Enter');
-    });
-    await randomDelay(2000, 3000);
-  }
-
-  // ── PASSWORD STEP ───────────────────────────────────────────────
-  const pwdInput = await page.waitForSelector(
-    'input[name="Passwd"], input[type="password"]',
-    { visible: true, timeout: 15000 }
-  ).catch(() => null);
-
-  if (!pwdInput) {
-    log.warn('Password input not found');
-    log.warn(`Waiting ${CONFIG.HP_PROMPT_WAIT / 1000}s for manual resolution (captcha?)...`);
-
-    await Promise.race([
-      page.waitForSelector('input[name="Passwd"]', { visible: true, timeout: CONFIG.HP_PROMPT_WAIT }),
-      page.waitForNavigation({ timeout: CONFIG.HP_PROMPT_WAIT }),
-    ]).catch(() => null);
-  }
-
-  if (await page.$('input[name="Passwd"]')) {
-    log.step('Filling password...');
-    
-    await page.click('input[name="Passwd"]');
-    await randomDelay(300, 600);
-    await page.type('input[name="Passwd"]', password, { delay: randomTypingDelay() });
-    await randomDelay(500, 1000);
-
-    await humanLikeScroll(page);
-    await humanLikeMouseMovement(page);
-    
-    await page.click('#passwordNext button').catch(() => {
-      page.keyboard.press('Enter');
-    });
-    await randomDelay(2500, 3500);
-  }
-
-  // ── HP VERIFICATION / CONSENT / CHALLENGE ───────────────────────
-  log.step('Waiting for verification / consent / redirect...');
-  log.warn('⚠️  Jika ada verifikasi di HP, klik OK di HP kamu sekarang!');
-  log.warn(`⚠️  Waktu tunggu: ${CONFIG.HP_PROMPT_WAIT / 1000} detik`);
-
-  const maxWait = CONFIG.GOOGLE_TIMEOUT;
-  const pollInterval = 2000;
-  let elapsed = 0;
-
-  while (elapsed < maxWait) {
-    const currentUrl = page.url();
-
-    // Check if we're back on Qoder (login success)
-    if (currentUrl.includes('qoder.com') || currentUrl.includes('qoder.sh')) {
-      log.ok('Redirected back to Qoder!');
-      return true;
-    }
-
-    // Handle "I understand" / "Saya mengerti" speedbump
-    const understandBtn = await page.$(
-      'button:has-text("I understand"), button:has-text("Saya mengerti")'
-    );
-    if (understandBtn) {
-      log.step('Clicking "I understand" speedbump...');
-      await humanLikeMouseMovement(page);
-      await understandBtn.click();
-      await randomDelay(2000, 3000);
-    }
-
-    // Handle consent (Lanjutkan / Continue / Allow)
-    const consentBtn = await page.$(
-      'button:has-text("Lanjutkan"), button:has-text("Continue"), ' +
-      'button:has-text("Allow"), button:has-text("Izinkan"), ' +
-      '#submit_approve_access'
-    );
-    if (consentBtn) {
-      log.step('Clicking consent button...');
-      await humanLikeMouseMovement(page);
-      await consentBtn.click();
-      await randomDelay(3000, 4000);
-    }
-
-    // Handle "Advanced" → "Go to" (unverified app)
-    const advancedBtn = await page.$(
-      'a:has-text("Advanced"), a:has-text("Lanjutan")'
-    );
-    if (advancedBtn) {
-      log.step('Clicking Advanced...');
-      await humanLikeMouseMovement(page);
-      await advancedBtn.click();
-      await randomDelay(1500, 2500);
-      const goToBtn = await page.$(
-        'a:has-text("Go to"), a:has-text("unsafe"), a:has-text("proceed")'
-      );
-      if (goToBtn) {
-        log.step('Clicking Go to...');
-        await humanLikeMouseMovement(page);
-        await goToBtn.click();
-        await randomDelay(2000, 3000);
-      }
-    }
-
-    // Handle security challenge / HP verification
-    const heading = await page.$eval('h1, [role="heading"]', el => el.textContent?.trim()).catch(() => '');
-    if (heading && (
-      heading.includes('Verify') || heading.includes('verify') ||
-      heading.includes('2-Step') || heading.includes('Verifikasi') ||
-      heading.includes('Confirm') || heading.includes('Konfirmasi')
-    )) {
-      log.warn(`🔐 Security challenge / HP verification: "${heading}"`);
-      log.warn(`⚠️  Klik OK di HP kamu sekarang! Waktu tunggu: ${CONFIG.HP_PROMPT_WAIT / 1000} detik...`);
-
-      try {
-        await page.waitForNavigation({ timeout: CONFIG.HP_PROMPT_WAIT });
-        log.ok('Verification completed!');
-      } catch (_) {
-        log.error('Timeout waiting for HP verification');
-      }
-      continue;
-    }
-
-    await sleep(pollInterval);
-    elapsed += pollInterval;
-  }
-
-  log.error('Timeout waiting for Google login to complete');
-  return false;
-}
-
-// ─── PROCESS SINGLE ACCOUNT ─────────────────────────────────────────
-async function processAccount(account, idx, total) {
-  const { email, password } = account;
-  log.header(`[${idx}/${total}] ${email}`);
-
-  let browser = null;
-  let qodercliProc = null;
-
-  try {
-    // ── 1. Start qodercli login ───────────────────────────────────
-    const qoderResult = await startQoderCliLogin();
-    
-    if (!qoderResult.url) {
-      throw new Error('Failed to get login URL from qodercli');
-    }
-
-    qodercliProc = qoderResult.process;
-    const loginUrl = qoderResult.url;
-
-    log.ok(`Login URL: ${loginUrl.slice(0, 80)}...`);
-
-    // ── 2. Launch browser (incognito) ─────────────────────────────
-    const chromePath = findSystemChrome();
-    if (!chromePath) {
-      throw new Error('Google Chrome not found');
-    }
-
-    browser = await puppeteer.launch({
-      headless: false,
+    this.browser = await puppeteer.launch({
+      headless: CONFIG.HEADLESS,
       executablePath: chromePath,
       slowMo: CONFIG.SLOW_MO,
       defaultViewport: null,
       args: [
-        '--no-sandbox',
-        '--disable-blink-features=AutomationControlled',
-        '--disable-infobars',
-        '--start-maximized',
-        '--disable-web-security',
+        '--no-sandbox', '--disable-blink-features=AutomationControlled',
+        '--disable-infobars', '--start-maximized', '--disable-web-security',
         '--disable-features=IsolateOrigins,site-per-process',
-        '--disable-dev-shm-usage',
-        '--disable-accelerated-2d-canvas',
-        '--no-first-run',
-        '--no-zygote',
-        '--disable-gpu',
-        '--incognito',  // Force incognito mode
+        '--disable-dev-shm-usage', '--disable-accelerated-2d-canvas',
+        '--no-first-run', '--no-zygote', '--disable-gpu',
       ],
     });
+    const context = await this.browser.createBrowserContext();
+    this.page = await context.newPage();
+    await this.page.setViewport({ width: 1280, height: 800 });
+  }
 
-    const context = await browser.createIncognitoBrowserContext();
-    const page = await context.newPage();
-    
-    const userAgent = randomUserAgent();
-    await page.setUserAgent(userAgent);
-    
-    const viewportWidth = 1280 + Math.floor(Math.random() * 200) - 100;
-    const viewportHeight = 800 + Math.floor(Math.random() * 100) - 50;
-    await page.setViewport({
-      width: viewportWidth,
-      height: viewportHeight,
-      deviceScaleFactor: 1 + Math.random() * 0.5,
-    });
+  findChrome() {
+    if (CONFIG.CHROME_PATH && fs.existsSync(CONFIG.CHROME_PATH)) return CONFIG.CHROME_PATH;
+    const platform = os.platform();
+    const candidates = [];
+    if (platform === 'win32') {
+      [process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].forEach(pf => {
+        if (pf) candidates.push(path.join(pf, 'Google', 'Chrome', 'Application', 'chrome.exe'));
+      });
+    } else if (platform === 'darwin') {
+      candidates.push('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+    } else {
+      candidates.push('/usr/bin/google-chrome', '/usr/bin/google-chrome-stable', '/usr/bin/chromium', '/usr/bin/chromium-browser');
+    }
+    for (const p of candidates) if (fs.existsSync(p)) return p;
+    return null;
+  }
 
-    // ── 3. Navigate to login URL ──────────────────────────────────
-    log.info('Opening login URL in browser...');
-    await page.goto(loginUrl, {
-      waitUntil: 'domcontentloaded',
-      timeout: CONFIG.NAV_TIMEOUT,
-    });
-    await page.waitForLoadState('networkidle2').catch(() => {});
+  async navigate(url) {
+    await this.page.goto(url, { waitUntil: 'domcontentloaded', timeout: CONFIG.NAV_TIMEOUT });
+    await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 }).catch(() => {});
     await randomDelay(2000, 3000);
+  }
 
-    await humanLikeScroll(page);
-    await humanLikeMouseMovement(page);
-
-    // ── 4. Click Google SSO button ────────────────────────────────
-    log.step('Looking for Google SSO button...');
-
-    const googleSelectors = [
-      'button:has-text("Google")',
-      'a:has-text("Google")',
+  async clickGoogleSSO() {
+    const selectors = [
+      'a[href*="/sso/login/google"]',
+      'a[href*="google"]',
       '[class*="google" i]',
-      'button:has-text("Sign in with Google")',
-      'span:has-text("Google")',
-      '[data-provider="google"]',
+      'button[data-provider="google"]',
+      '[aria-label*="Google" i]',
+      'img[alt*="Google" i]',
     ];
+    for (const sel of selectors) {
+      const el = await this.page.$(sel);
+      if (el && await el.isIntersectingViewport().catch(() => false)) {
+        await el.click();
+        await randomDelay(2000, 3000);
+        return;
+      }
+    }
+    // JS fallback
+    await this.page.evaluate(() => {
+      const els = document.querySelectorAll('button, a, div[role="button"], span[role="button"]');
+      for (const el of els) {
+        if ((el.textContent || '').toLowerCase().includes('google')) {
+          el.scrollIntoView({ block: 'center' });
+          el.click();
+          return true;
+        }
+      }
+      return false;
+    }).then(clicked => {
+      if (clicked) log.step('Local: Google SSO button found via JS fallback');
+      else log.warn('Google SSO button not found via CSS or JS fallback');
+    });
+    await randomDelay(2000, 3000);
+  }
 
-    let googleBtn = null;
-    for (const sel of googleSelectors) {
-      googleBtn = await page.$(sel);
-      if (googleBtn) {
-        const isVisible = await googleBtn.isIntersectingViewport();
-        if (isVisible) break;
-        googleBtn = null;
+  async fillGoogleEmail(email) {
+    await this.page.waitForSelector('input#identifierId, input[type="email"]', { visible: true, timeout: 15000 });
+    await this.page.click('input#identifierId');
+    await randomDelay(300, 600);
+    await this.page.type('input#identifierId', email, { delay: randomTypingDelay() });
+    await randomDelay(500, 1000);
+    await this.page.click('#identifierNext button').catch(() => this.page.keyboard.press('Enter'));
+    await randomDelay(2000, 3000);
+  }
+
+  async fillGooglePassword(password) {
+    await this.page.waitForSelector('input[name="Passwd"], input[type="password"]', { visible: true, timeout: 15000 });
+    await this.page.click('input[name="Passwd"]');
+    await randomDelay(300, 600);
+    await this.page.type('input[name="Passwd"]', password, { delay: randomTypingDelay() });
+    await randomDelay(500, 1000);
+    await this.page.click('#passwordNext button').catch(() => this.page.keyboard.press('Enter'));
+    await randomDelay(2500, 3500);
+  }
+
+  async url() { return this.page.url(); }
+
+  async close() {
+    if (this.browser) await this.browser.close().catch(() => {});
+  }
+}
+
+// ═══════════════════════════════════════════════════════════
+//  GOOGLE FLOW (CamoFox)
+// ═══════════════════════════════════════════════════════════
+async function handleCamoFoxGoogle(driver, email, password) {
+  log.step('CamoFox: clicking Google SSO...');
+  const snap = await driver.snapshot();
+  const refs = parseRefs(snap.snapshot);
+  const googleRef = findRef(refs, ['google', 'sign in with google']);
+  if (!googleRef) throw new Error('Google SSO button not found in snapshot');
+  await driver.click(googleRef);
+
+  // Email
+  log.step('CamoFox: filling email...');
+  await waitForCamoFoxUrl(driver, (u) => u.includes('/identifier') || u.includes('accounts.google.com'));
+  const emailSnap = await driver.snapshot();
+  const emailRef = findRefByType(emailSnap.snapshot, 'textbox') || findRef(parseRefs(emailSnap.snapshot), ['email', 'e-mel', 'phone']);
+  if (!emailRef) throw new Error('Email input not found');
+  await driver.type(emailRef, email);
+  const nextRef = findRef(parseRefs(emailSnap.snapshot), ['next', 'seterusnya', 'lanjutkan']);
+  if (nextRef) await driver.click(nextRef);
+  else await driver.evaluate("document.querySelector('#identifierNext button')?.click() || document.querySelector('button[type=submit]')?.click()");
+
+  await randomDelay(3000, 5000);
+
+  // Password
+  log.step('CamoFox: filling password...');
+  const pwdSnap = await driver.snapshot();
+  const pwdRef = findRefByType(pwdSnap.snapshot, 'textbox') || findRef(parseRefs(pwdSnap.snapshot), ['password', 'kata laluan', 'kata sandi']);
+  if (pwdRef) await driver.type(pwdRef, password);
+  else await driver.evaluate(`(async () => { const el = document.querySelector('input[name="Passwd"]'); if (el) { el.value = ${JSON.stringify(password)}; el.dispatchEvent(new Event('input', {bubbles:true})); } })()`);
+  const pwdNextRef = findRef(parseRefs(pwdSnap.snapshot), ['next', 'seterusnya']);
+  if (pwdNextRef) await driver.click(pwdNextRef);
+  else await driver.evaluate("document.querySelector('#passwordNext button')?.click() || document.querySelector('button[type=submit]')?.click()");
+
+  await randomDelay(3000, 5000);
+
+  // 2FA / Consent / Redirect
+  return handlePostPassword(driver);
+}
+
+function parseRefs(snapshotText) {
+  const refs = [];
+  if (!snapshotText) return refs;
+  const lines = snapshotText.split('\n');
+  for (const line of lines) {
+    // Handles: - link "google Sign in with Google" [e1]:
+    // Handles: - textbox "Masukkan kata laluan" [e1]
+    const m = line.match(/^(\s*)-\s+(\w+)\s+(.+?)\s+\[e(\d+)\]/);
+    if (m) {
+      refs.push({ indent: m[1].length, type: m[2], text: m[3].trim(), ref: `e${m[4]}`, raw: line });
+    }
+  }
+  return refs;
+}
+
+function findRef(refs, keywords) {
+  for (const r of refs) {
+    const t = `${r.type} ${r.text}`.toLowerCase();
+    if (keywords.some(k => t.includes(k.toLowerCase()))) return r.ref;
+  }
+  return null;
+}
+
+function findRefByType(snapshotText, type) {
+  const refs = parseRefs(snapshotText);
+  for (const r of refs) if (r.type.toLowerCase() === type.toLowerCase()) return r.ref;
+  return null;
+}
+
+async function waitForCamoFoxUrl(driver, predicate, timeout = 30000) {
+  const start = Date.now();
+  while (Date.now() - start < timeout) {
+    const u = await driver.url();
+    if (predicate(u)) return u;
+    await sleep(1000);
+  }
+  return await driver.url();
+}
+
+async function handlePostPassword(driver) {
+  const start = Date.now();
+  while (Date.now() - start < CONFIG.GOOGLE_TIMEOUT) {
+    const u = await driver.url();
+    if (u.includes('qoder.com') || u.includes('qoder.sh')) {
+      log.ok('Redirected back to Qoder!');
+      return true;
+    }
+
+    const snap = await driver.snapshot();
+    const text = (snap.snapshot || '').toLowerCase();
+    const refs = parseRefs(snap.snapshot);
+
+    // Auto TOTP
+    if (CONFIG.TOTP_CODE && (text.includes('pengesah') || text.includes('authenticator') || text.includes('totp') || text.includes('kod') || text.includes('code'))) {
+      const codeRef = findRefByType(snap.snapshot, 'textbox');
+      if (codeRef) {
+        log.step(`Auto-entering TOTP code: ${CONFIG.TOTP_CODE}`);
+        await driver.type(codeRef, CONFIG.TOTP_CODE);
+        const nextRef = findRef(refs, ['next', 'seterusnya', 'verify']);
+        if (nextRef) await driver.click(nextRef);
+        await randomDelay(3000, 5000);
+        continue;
       }
     }
 
-    if (!googleBtn) {
-      googleBtn = await page.evaluateHandle(() => {
-        const els = document.querySelectorAll('button, a, div[role="button"], span');
-        for (const el of els) {
-          const txt = (el.textContent || '').toLowerCase();
-          if (txt.includes('google')) return el;
+    // Manual 2FA wait (only if HEADLESS=false in local, but CamoFox is always somewhat headless)
+    if (CONFIG.TWO_FA_WAIT > 0 && (text.includes('2 langkah') || text.includes('2-step') || text.includes('verify') || text.includes('pengesahan'))) {
+      log.warn(`🔐 Manual 2FA wait: ${CONFIG.TWO_FA_WAIT}s`);
+      const deadline = Date.now() + CONFIG.TWO_FA_WAIT * 1000;
+      while (Date.now() < deadline) {
+        const u2 = await driver.url();
+        if (u2.includes('qoder.com') || u2.includes('qoder.sh')) {
+          log.ok('Redirected to Qoder — 2FA passed!');
+          return true;
         }
-        return null;
-      });
+        await sleep(2000);
+      }
+      log.error('Manual 2FA timeout');
+      return false;
     }
 
-    if (!googleBtn || !await googleBtn.asElement()) {
-      await page.screenshot({ path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_no_google_btn.png`) });
-      throw new Error('Google SSO button not found');
+    // Auto consent
+    const consentTexts = ['allow', 'continue', 'next', 'approve', 'confirm', 'accept', 'izinkan', 'lanjutkan', 'setuju', 'ya'];
+    const consentRef = findRef(refs, consentTexts);
+    if (consentRef) {
+      log.step(`Auto-clicking consent: ${consentRef}`);
+      await driver.click(consentRef);
+      await randomDelay(2000, 3000);
+      continue;
     }
 
-    log.step('Clicking Google SSO...');
-    await humanLikeMouseMovement(page);
-    await googleBtn.asElement().click();
-    await randomDelay(2000, 3000);
-
-    // ── 5. Handle Google login ────────────────────────────────────
-    log.info('Handling Google login...');
-    const loginOk = await handleGoogleLogin(page, email, password);
-
-    if (!loginOk) {
-      await page.screenshot({ path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_login_fail.png`) });
-      throw new Error('Google login failed or timed out');
-    }
-
-    // ── 6. Wait for qodercli to complete ──────────────────────────
-    log.info('Waiting for qodercli to complete login...');
-    
-    if (qodercliProc) {
-      // Wait for qodercli process to exit
-      await new Promise((resolve) => {
-        const timeout = setTimeout(() => {
-          log.warn('Timeout waiting for qodercli to complete');
-          qodercliProc.kill();
-          resolve();
-        }, CONFIG.QODERCLI_TIMEOUT);
-
-        qodercliProc.on('close', (code) => {
-          clearTimeout(timeout);
-          if (code === 0) {
-            log.ok('qodercli login completed!');
-          } else {
-            log.warn(`qodercli exited with code ${code}`);
+    // Advanced unsafe app fallback
+    if (text.includes('advanced') || text.includes('unsafe')) {
+      await driver.evaluate(`
+        document.querySelector('#advancedButton, [id*="advanced"]')?.click();
+        setTimeout(() => {
+          for (const el of document.querySelectorAll('a, button')) {
+            const t = (el.textContent || '').toLowerCase();
+            if (t.includes('go to') || t.includes('unsafe') || t.includes('proceed') || t.includes('lanjutkan')) el.click();
           }
-          resolve();
-        });
-      });
+        }, 1000);
+      `);
+      await randomDelay(3000, 5000);
+      continue;
     }
 
-    await randomDelay(2000, 3000);
+    await sleep(2000);
+  }
+  log.error('Timeout waiting for Google redirect');
+  return false;
+}
 
-    log.ok(`✓ ${email} — LOGIN SUCCESS`);
+// ═══════════════════════════════════════════════════════════
+//  PROCESS SINGLE ACCOUNT
+// ═══════════════════════════════════════════════════════════
+async function processAccount(account, idx, total) {
+  const { email, password } = account;
+  log.header(`[${idx}/${total}] ${email}`);
 
-    // ── 7. Logout from Qoder CLI ──────────────────────────────────
-    await randomDelay(2000, 3000);
-    const logoutOk = logoutFromQoderCLI();
+  let driver = null;
+  let qodercliProc = null;
 
-    if (logoutOk) {
-      log.ok(`✓ ${email} — LOGOUT SUCCESS (via qodercli)`);
+  try {
+    // Phase 1: start qodercli login (keep alive)
+    const loginInfo = await startQoderCliLogin();
+    qodercliProc = loginInfo.proc;
+    const loginUrl = loginInfo.url;
+
+    // Phase 2: browser sign-in
+    log.info(`Phase 2: Browser sign-in via ${CONFIG.BROWSER_MODE}...`);
+    if (CONFIG.BROWSER_MODE === 'camofox') {
+      if (!CONFIG.CAMOFOX_API_KEY || CONFIG.CAMOFOX_API_KEY === 'your_camofox_api_key_here') {
+        throw new Error('CAMOFOX_API_KEY not configured');
+      }
+      driver = new CamoFoxDriver();
+      await driver.start();
+      await driver.newTab(loginUrl);
+      const loginOk = await handleCamoFoxGoogle(driver, email, password);
+      if (!loginOk) throw new Error('Google login failed or timed out');
     } else {
-      log.warn(`⚠ ${email} — Logout failed, but login was successful`);
+      driver = new LocalPuppeteerDriver();
+      await driver.init();
+      await driver.navigate(loginUrl);
+      await driver.clickGoogleSSO();
+      await driver.fillGoogleEmail(email);
+      await driver.fillGooglePassword(password);
+      const loginOk = await handleLocalPostPassword(driver);
+      if (!loginOk) throw new Error('Google login failed or timed out');
     }
 
-    // ── 8. Save result ────────────────────────────────────────────
-    const resultFile = path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}.json`);
-    fs.writeFileSync(resultFile, JSON.stringify({
-      email,
-      status: 'SUCCESS',
-      login: true,
-      logout: logoutOk,
-      timestamp: new Date().toISOString(),
-    }, null, 2));
+    // Phase 2b: wait for qodercli callback
+    log.step('Waiting for qodercli callback confirmation...');
+    const callbackOk = await waitForQodercliLogin(loginInfo, CONFIG.QODERCLI_CALLBACK_TIMEOUT);
+    if (!callbackOk) log.warn('qodercli did not report Login successful within timeout, but continuing');
+    else log.ok('qodercli callback confirmed');
 
-    // ── 9. Move to done ───────────────────────────────────────────
+    // Phase 3: first message (optional)
+    let msgResult = { success: false, skipped: true };
+    if (CONFIG.FIRST_MESSAGE && CONFIG.FIRST_MESSAGE.trim()) {
+      await randomPause();
+      msgResult = await sendFirstMessage(CONFIG.FIRST_MESSAGE);
+    }
+
+    // Phase 4: logout
+    await randomPause();
+    const logoutOk = await logoutQoderCli();
+
+    saveResult(email, {
+      email, status: 'SUCCESS', login: true, callbackConfirmed: callbackOk,
+      firstMessage: msgResult.success, logout: logoutOk,
+      error: msgResult.error || null,
+    });
     moveToDone(account);
-
     return { success: true, email };
 
   } catch (err) {
     log.error(`${email} — FAILED: ${err.message}`);
-    
-    if (browser) {
-      const pages = await browser.pages();
-      if (pages.length > 0) {
-        await pages[0].screenshot({
-          path: path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}_error.png`)
-        }).catch(() => {});
-      }
-    }
-
-    const resultFile = path.join(CONFIG.RESULTS_DIR, `${email.replace(/[@.]/g, '_')}.json`);
-    fs.writeFileSync(resultFile, JSON.stringify({
-      email,
-      status: 'FAILED',
-      error: err.message,
-      timestamp: new Date().toISOString(),
-    }, null, 2));
-
+    saveResult(email, { email, status: 'FAILED', error: err.message });
     return { success: false, email, error: err.message };
 
   } finally {
-    if (browser) {
-      await browser.close();
-    }
+    if (driver) await driver.close().catch(() => {});
     if (qodercliProc && !qodercliProc.killed) {
+      log.step('Cleaning up qodercli process...');
       qodercliProc.kill();
     }
   }
 }
 
-// ─── MAIN ───────────────────────────────────────────────────────────
-async function main() {
-  log.header('Qoder Sign — Google SSO Auto Login/Logout');
+// ─── Local post-password flow (2FA / consent / redirect) ────
+async function handleLocalPostPassword(driver) {
+  const page = driver.page;
+  const start = Date.now();
+  while (Date.now() - start < CONFIG.GOOGLE_TIMEOUT) {
+    const u = await driver.url();
+    if (u.includes('qoder.com') || u.includes('qoder.sh')) {
+      log.ok('Redirected back to Qoder!');
+      return true;
+    }
 
+    // Auto TOTP
+    if (CONFIG.TOTP_CODE) {
+      try {
+        const totpInput = await page.waitForSelector(
+          'input[type="tel"], input[type="text"][name*="code" i], input[aria-label*="code" i], input[inputmode="numeric"]',
+          { visible: true, timeout: 3000 }
+        );
+        if (totpInput) {
+          log.step(`Auto-entering TOTP: ${CONFIG.TOTP_CODE}`);
+          await totpInput.type(CONFIG.TOTP_CODE, { delay: randomTypingDelay() });
+          await page.keyboard.press('Enter');
+          await randomDelay(3000, 5000);
+          continue;
+        }
+      } catch (_) {
+        // No TOTP input found, continue with consent detection
+      }
+    }
+
+    // Manual 2FA wait in visible browser
+    if (!CONFIG.HEADLESS && CONFIG.TWO_FA_WAIT > 0) {
+      const heading = await page.$eval('h1, h2, [role="heading"]', el => el.textContent?.trim()).catch(() => '');
+      if (/2.step|2 langkah|verify|verifikasi|confirm|konfirmasi|pengesahan/i.test(heading)) {
+        log.warn(`🔐 Manual 2FA wait: ${CONFIG.TWO_FA_WAIT}s — complete on your phone!`);
+        const deadline = Date.now() + CONFIG.TWO_FA_WAIT * 1000;
+        while (Date.now() < deadline) {
+          const u2 = await driver.url();
+          if (u2.includes('qoder.com') || u2.includes('qoder.sh')) {
+            log.ok('Redirected to Qoder — 2FA passed!');
+            return true;
+          }
+          await sleep(2000);
+        }
+        log.error('Manual 2FA timeout');
+        return false;
+      }
+    }
+
+    // Auto consent
+    const clicked = await page.evaluate(() => {
+      const ids = ['confirm', 'submit_approve_access', 'approve_button', 'next'];
+      for (const id of ids) { const el = document.getElementById(id); if (el && el.offsetParent !== null) { el.click(); return id; } }
+      const buttons = document.querySelectorAll('button, [role="button"], input[type="submit"]');
+      const texts = ['allow', 'continue', 'next', 'approve', 'confirm', 'accept', 'izinkan', 'lanjutkan', 'setuju', 'ya'];
+      for (const btn of buttons) {
+        const t = (btn.textContent || btn.value || '').toLowerCase().trim();
+        if (texts.some(x => t.includes(x))) { btn.click(); return t; }
+      }
+      const adv = document.querySelector('#advancedButton') || document.querySelector('[id*="advanced"]');
+      if (adv) { adv.click(); return 'advanced'; }
+      return null;
+    });
+    if (clicked) {
+      log.step(`Consent clicked: ${clicked}`);
+      await randomDelay(2000, 3000);
+      continue;
+    }
+
+    await sleep(2000);
+  }
+  log.error('Timeout waiting for Google redirect');
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════════
+//  MAIN
+// ═══════════════════════════════════════════════════════════
+async function main() {
+  log.header('Qoder Sign — Auto Login/Logout (v3)');
   fs.mkdirSync(CONFIG.RESULTS_DIR, { recursive: true });
 
   const accounts = loadAccounts();
   if (accounts.length === 0) {
-    log.error('accounts.txt is empty!');
-    log.info('Add accounts in format: email@gmail.com:password');
+    log.error('No accounts to process. Check accounts.txt');
     process.exit(1);
   }
 
-  log.info(`Found ${accounts.length} account(s) to process`);
-  log.info(`Mode: VISIBLE (browser terlihat untuk handle captcha/HP prompt)`);
-  log.info(`HP Prompt Wait: ${CONFIG.HP_PROMPT_WAIT / 1000} detik`);
-  log.info(`Anti-banned: Stealth + Random delays + Human behavior + UA rotation`);
+  log.info(`Accounts: ${accounts.length}`);
+  log.info(`Browser: ${CONFIG.BROWSER_MODE} | Headless: ${CONFIG.BROWSER_MODE === 'local' ? CONFIG.HEADLESS : CONFIG.CAMOFOX_HEADLESS}`);
+  log.info(`2FA: ${CONFIG.TWO_FA_WAIT > 0 ? CONFIG.TWO_FA_WAIT + 's manual' : 'auto-skip'} | TOTP auto: ${CONFIG.TOTP_CODE ? 'yes' : 'no'}`);
+  log.info(`First message: "${CONFIG.FIRST_MESSAGE}"`);
   console.log('');
 
   const results = { success: [], failed: [] };
+  let retryQueue = [...accounts];
+  let retryCount = 0;
 
-  for (let i = 0; i < accounts.length; i++) {
-    const result = await processAccount(accounts[i], i + 1, accounts.length);
+  while (retryQueue.length > 0 && retryCount <= CONFIG.MAX_RETRIES) {
+    const batch = [...retryQueue];
+    retryQueue = [];
+    if (retryCount > 0) log.header(`RETRY ROUND ${retryCount} — ${batch.length} account(s)`);
 
-    if (result.success) {
-      results.success.push(result.email);
-    } else {
-      results.failed.push({ email: result.email, error: result.error });
+    for (let i = 0; i < batch.length; i++) {
+      const result = await processAccount(batch[i], i + 1, batch.length);
+      if (result.success) results.success.push(result.email);
+      else { results.failed.push({ email: result.email, error: result.error }); retryQueue.push(batch[i]); }
+
+      if (i < batch.length - 1) {
+        const delay = CONFIG.DELAY_BETWEEN + randomInt(0, 5000);
+        log.info(`Waiting ${(delay / 1000).toFixed(1)}s before next account...`);
+        await sleep(delay);
+      }
     }
-
-    if (i < accounts.length - 1) {
-      const delay = CONFIG.DELAY_BETWEEN + Math.floor(Math.random() * 5000);
-      log.info(`Waiting ${(delay / 1000).toFixed(1)}s before next account...`);
-      await sleep(delay);
+    retryCount++;
+    if (retryQueue.length > 0 && retryCount <= CONFIG.MAX_RETRIES) {
+      log.warn(`${retryQueue.length} failed. Retry in ${CONFIG.RETRY_DELAY / 1000}s...`);
+      await sleep(CONFIG.RETRY_DELAY);
     }
   }
 
   log.header('SUMMARY');
   log.ok(`Success: ${results.success.length}`);
   results.success.forEach(e => log.step(`✓ ${e}`));
-
   if (results.failed.length > 0) {
     log.error(`Failed: ${results.failed.length}`);
     results.failed.forEach(r => log.step(`✗ ${r.email} — ${r.error}`));
   }
-
-  log.info(`Done accounts → ${CONFIG.DONE_FILE}`);
-  log.info(`Results dir   → ${CONFIG.RESULTS_DIR}`);
+  log.info(`Done → ${CONFIG.DONE_FILE}`);
+  log.info(`Results → ${CONFIG.RESULTS_DIR}`);
 }
 
-main().catch(err => {
-  log.error(`Fatal: ${err.message}`);
-  console.error(err);
-  process.exit(1);
-});
+main().catch((err) => { log.error(`FATAL: ${err.message}`); process.exit(1); });
